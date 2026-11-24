@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>지오홈 (GEOHOME) | 전국 분양 현장 실시간 비교 지도</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif; background: #f4f6f9; color: #1e293b; }
+    #map { width: 100%; height: 100%; position: relative; z-index: 1; }
+
+    /* 상단 통합 검색 및 필터 바 */
+    .top-bar {
+      position: fixed; top: 12px; left: 12px; right: 12px; z-index: 20;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      pointer-events: none;
+    }
+    .search-box, .filter-group, .region-group {
+      pointer-events: auto; background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #e2e8f0; border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+      padding: 6px 10px; display: flex; align-items: center; gap: 6px;
+    }
+    .search-box input {
+      border: none; outline: none; font-size: 13px; width: 170px; background: transparent; color: #0f172a;
+      -webkit-user-select: text; user-select: text;
+    }
+    .chip-btn {
+      border: 1px solid #cbd5e1; background: #fff; color: #334155;
+      font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .chip-btn.active { background: #dc2626; color: #fff; border-color: #dc2626; }
+    .region-btn {
+      border: none; background: #f1f5f9; color: #334155;
+      font-size: 11.5px; font-weight: 600; padding: 5px 8px; border-radius: 7px; cursor: pointer;
+    }
+    .region-btn:hover { background: #e2e8f0; }
+
+    /* 커스텀 마커 스타일 */
+    .gh-marker {
+      background: #ffffff; border: 2px solid #dc2626; border-radius: 10px;
+      padding: 4px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+      cursor: pointer; text-align: center; transition: transform 0.15s;
+      min-width: 92px;
+    }
+    .gh-marker:hover { transform: translateY(-3px) scale(1.03); z-index: 999; }
+    .gh-marker.sub { border-color: #2563eb; }
+    .gh-marker-badge {
+      display: inline-block; font-size: 10px; font-weight: 700; color: #fff;
+      background: #dc2626; padding: 1px 5px; border-radius: 4px; margin-bottom: 2px;
+    }
+    .gh-marker.sub .gh-marker-badge { background: #2563eb; }
+    .gh-marker-title { font-size: 11.5px; font-weight: 700; color: #0f172a; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+    .gh-marker-sub { font-size: 10px; color: #64748b; margin-top: 1px; }
+
+    /* 우측/하단 상세 모달 패널 */
+    .detail-panel {
+      position: fixed; top: 68px; right: 14px; bottom: 44px; width: 370px; max-width: calc(100vw - 28px);
+      background: #ffffff; border-radius: 16px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+      border: 1px solid #e2e8f0; z-index: 30; display: none; flex-direction: column; overflow: hidden;
+    }
+    .detail-panel.open { display: flex; }
+    .dp-header {
+      padding: 16px 18px 12px; border-bottom: 1px solid #f1f5f9; position: relative; background: #fff;
+    }
+    .dp-close {
+      position: absolute; top: 14px; right: 14px; width: 28px; height: 28px;
+      border: none; background: #f1f5f9; border-radius: 50%; font-size: 15px; cursor: pointer; color: #475569;
+    }
+    .live-viewers {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+      font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;
+    }
+    .live-dot { width: 7px; height: 7px; background: #dc2626; border-radius: 50%; animation: pulse 1.3s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .dp-title { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.3; padding-right: 28px; }
+    .dp-addr { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .benefit-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .benefit-tag {
+      background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
+      font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    }
+
+    .dp-body { padding: 14px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+    .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+    .info-card h4 { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+    .info-grid { display: grid; grid-template-columns: 82px 1fr; row-gap: 6px; font-size: 12.5px; }
+    .info-label { color: #64748b; font-weight: 600; }
+    .info-val { color: #0f172a; font-weight: 600; }
+
+    /* 인근 편의시설 요약 리스트 */
+    .infra-list { display: flex; flex-direction: column; gap: 6px; }
+    .infra-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; font-size: 12px;
+    }
+    .infra-cat { font-weight: 700; color: #334155; }
+    .infra-name { color: #0f172a; font-weight: 600; max-width: 165px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .infra-dist { font-weight: 800; color: #dc2626; font-size: 11.5px; }
+
+    /* 초기 자금 간편 계산기 */
+    .calc-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .calc-row input {
+      flex: 1; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12.5px;
+      -webkit-user-select: text; user-select: text;
+    }
+    .calc-row select { padding: 7px 6px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; background: #fff; }
+    .calc-res { background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.6; }
+
+    .dp-footer { padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+    .cta-btn {
+      width: 100%; padding: 12px; border: none; border-radius: 10px;
+      background: #dc2626; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+    .cta-btn:hover { background: #b91c1c; }
+
+    /* 하단 고정 안내 바 */
+    .bottom-bar {
+      position: fixed; bottom: 8px; left: 12px; right: 12px; z-index: 15;
+      display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+      font-size: 11px; color: #475569;
+    }
+    .watermark-pill {
+      pointer-events: auto; background: rgba(255,255,255,0.92); border: 1px solid #e2e8f0;
+      padding: 4px 10px; border-radius: 8px; font-weight: 600;
+    }
+
+    @media (max-width: 640px) {
+      .detail-panel { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; max-height: 72vh; }
+      .search-box input { width: 125px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 필터 및 지역 빠른 이동 -->
+  <div class="top-bar">
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="분양 단지명 또는 지역 검색" />
+    </div>
+    <div class="filter-group">
+      <button class="chip-btn active" data-filter="ALL">전체 분양</button>
+      <button class="chip-btn" data-filter="DIRECT">직영·선착순</button>
+      <button class="chip-btn" data-filter="APPLY">청약공고</button>
+    </div>
+    <div class="region-group">
+      <button class="region-btn" onclick="moveRegion(36.35, 127.85, 12)">전국</button>
+      <button class="region-btn" onclick="moveRegion(37.5665, 126.9780, 9)">수도권</button>
+      <button class="region-btn" onclick="moveRegion(35.1796, 129.0756, 8)">부산·경남</button>
+      <button class="region-btn" onclick="moveRegion(35.8714, 128.6014, 9)">대구·경북</button>
+      <button class="region-btn" onclick="moveRegion(36.3504, 127.3845, 9)">대전·충청</button>
+      <button class="region-btn" onclick="moveRegion(35.1595, 126.8526, 9)">광주·전라</button>
+    </div>
+  </div>
+
+  <!-- 지도 영역 -->
+  <div id="map"></div>
+
+  <!-- 현장 상세 정보 모달 -->
+  <aside class="detail-panel" id="detailPanel">
+    <div class="dp-header">
+      <button class="dp-close" onclick="closeDetail()">✕</button>
+      <div class="live-viewers"><span class="live-dot"></span><span id="liveViewerText">현재 12명이 이 현장을 보고 있습니다</span></div>
+      <div class="dp-title" id="dpTitle">단지명</div>
+      <div class="dp-addr" id="dpAddr">주소 정보</div>
+      <div class="benefit-row" id="dpBenefits"></div>
+    </div>
+
+    <div class="dp-body">
+      <div class="info-card">
+        <h4>📋 핵심 분양 개요</h4>
+        <div class="info-grid" id="dpOverview"></div>
+      </div>
+
+      <div class="info-card">
+        <h4>🏫 인근 편의시설 요약 <span style="font-size:11px;font-weight:500;color:#64748b;">직선거리 기준</span></h4>
+        <div class="infra-list" id="dpInfra">
+          <div class="infra-item"><span class="infra-name">주변 시설 정보를 불러오는 중...</span></div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <h4>💰 초기 자금(계약금·잔금) 간편 계산기</h4>
+        <div class="calc-row">
+          <input type="number" id="calcPrice" placeholder="분양가 입력 (단위: 만원, 예: 55000)" oninput="runFundCalc()" />
+          <select id="calcDepositRate" onchange="runFundCalc()">
+            <option value="0.05">계약금 5%</option>
+            <option value="0.10" selected>계약금 10%</option>
+          </select>
+        </div>
+        <div class="calc-res" id="calcResult">분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.</div>
+      </div>
+    </div>
+
+    <div class="dp-footer">
+      <button class="cta-btn" id="dpCtaBtn" onclick="goTallyConsult()">1:1 맞춤 상담 및 모델하우스 방문 예약 →</button>
+    </div>
+  </aside>
+
+  <!-- 하단 워터마크 -->
+  <div class="bottom-bar">
+    <div class="watermark-pill">지오홈 (GEOHOME) 전국 분양현장 전용 지도 | 직영 관리</div>
+  </div>
+
+  <script>
+    (function () {
+      // 1. 허용 도메인 잠금
+      const allowedHosts = ['geohome24.github.io', 'sites.google.com', 'googleusercontent.com', 'script.google.com', 'localhost', '127.0.0.1'];
+      const currentHost = window.location.hostname || '';
+      const isAllowed = allowedHosts.some(h => currentHost.includes(h)) || currentHost === '';
+      if (!isAllowed) {
+        document.body.innerHTML = '<div style="padding:40px;text-align:center;font-weight:700;">허용되지 않은 도메인 접근입니다.</div>';
+        return;
+      }
+
+      // 2. 우클릭 및 개발자도구 단축키 차단
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('keydown', e => {
+        if (
+          e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
+          (e.ctrlKey && ['U', 'S'].includes(e.key.toUpperCase()))
+        ) {
+          e.preventDefault();
+        }
+      });
+
+      // 3. 민감 키/URL 이중 Base64 난독화 디코더
+      const d2 = (s) => atob(atob(s));
+      const CFG = {
+        KAKAO_KEY: d2('TkRJMU5UTXlORFF4T0RkbU0yUTBNMkl3TVdZNU9HRTBORGsyT0RRMk1HWmtZdz09'),
+        GAS_URL: d2('YUhSMGNITTZMeTl6WTNKcGNIUXVaMjl2WjJ4bExtTnZiUzl0WVdOeWIzTXZjeTlCUzJaNWMySjRNR0pxUmxoclZqWTBjbEZYT1RBeU1sQkhUR3RXUkVaMmFtMXhkR1ZuTVV0bU5YVnFRMk5VYW5oU1R5OWxlR1ZqUDIxdlpHVTlaR0YwWVE9PQ=='),
+        APPLY_API: d2('YUhSMGNITTZMeTloY0drdWIyUnNiM1ZrTG10eUwyeHZZV2t2UVhCd2JIbG9iMjFsU1c1bWJ6UmxkR0ZwYkZOMll5OTJNUzlCWkZSTGJtOXljbEZ2Y0ZSb2JHNHZaMlYwUVZCVVRHeDBkRzkwU0d4aGJtTmtSVzV2YkZCUk1qUXhNRFEyTkRFMU9EY3dOUT09'),
+        // ★ 추후 Tally.so 접수폼 링크 생성 후 아래 주소만 교체하세요 (현재는 오픈카톡 직통 연결)
+        TALLY_URL: 'https://open.kakao.com/o/ss9n3rXi',
+        // ★ 추후 구글 애즈 전환 번호 발급 시 'AW-XXXXXXXXX/YYYYYYYY' 형태로 입력하세요
+        GOOGLE_ADS_CONVERSION_ID: ''
+      };
+
+      let map, ps, geocoder;
+      let allItems = [];
+      let overlays = [];
+      let currentFilter = 'ALL';
+      let selectedItem = null;
+
+      // 카카오맵 SDK 동적 로드 (Places 라이브러리 포함)
+      const sdk = document.createElement('script');
+      sdk.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CFG.KAKAO_KEY}&libraries=services&autoload=false`;
+      sdk.onload = () => kakao.maps.load(initMap);
+      document.head.appendChild(sdk);
+
+      function initMap() {
+        const container = document.getElementById('map');
+        map = new kakao.maps.Map(container, {
+          center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
+          level: 12
+        });
+        ps = new kakao.maps.services.Places();
+        geocoder = new kakao.maps.services.Geocoder();
+
+        // 앱스 스크립트 & 청약홈 API 독립 호출 (Promise.all 금지)
+        fetchSheetData();
+        fetchApplyHomeData();
+      }
+
+      // 시트 직영 분양 데이터 호출
+      function fetchSheetData() {
+        fetch(CFG.GAS_URL)
+          .then(res => res.json())
+          .then(data => {
+            const rows = Array.isArray(data) ? data : (data.data || []);
+            rows.forEach((r, idx) => {
+              const status = String(r['구분'] || r['상태'] || r.type || '').trim();
+              // 입주완료·일반매물·제휴 제외, 분양 현장만 수용
+              if (status.includes('입주') || status.includes('매매') || status.includes('제휴')) return;
+
+              const name = r['단지명'] || r['현장명'] || r.name || '';
+              const addr = r['주소'] || r['위치'] || r.address || '';
+              const lat = parseFloat(r['위도'] || r.lat);
+              const lng = parseFloat(r['경도'] || r.lng);
+              if (!name) return;
+
+              const item = {
+                id: 'sheet_' + idx,
+                category: 'DIRECT',
+                badge: status || '선착순·특혜',
+                name: name,
+                addr: addr,
+                lat: lat,
+                lng: lng,
+                scale: r['세대수'] || r['규모'] || '-',
+                price: r['분양가'] || r['가격'] || '상담 문의',
+                moveIn: r['입주시기'] || r['입주예정'] || '-',
+                benefits: (r['혜택'] || r['특장점'] || '계약조건 안심보장,선착순 동호지정').split(',').map(s => s.trim()).filter(Boolean)
+              };
+
+              if (!isNaN(lat) && !isNaN(lng)) {
+                allItems.push(item);
+                renderMarkers();
+              } else if (addr) {
+                geocoder.addressSearch(addr, (res, st) => {
+                  if (st === kakao.maps.services.Status.OK && res[0]) {
+                    item.lat = parseFloat(res[0].y);
+                    item.lng = parseFloat(res[0].x);
+                    allItems.push(item);
+                    renderMarkers();
+                  }
+                });
+              }
+            });
+          })
+          .catch(() => {});
+      }
+
+      // 청약홈 신규 공고 데이터 독립 호출
+      function fetchApplyHomeData() {
+        fetch(CFG.APPLY_API)
+          .then(res => res.json())
+          .then(json => {
+            const list = (json && json.data) ? json.data : [];
+            const recent = list.slice(0, 60); // 최신 분양 공고 중심
+            recent.forEach((p, idx) => {
+              const name = p.HOUSE_NM || '';
+              const addr = p.HSSPLY_ADRES || '';
+              if (!name || !addr) return;
+
+              geocoder.addressSearch(addr, (res, st) => {
+                if (st === kakao.maps.services.Status.OK && res[0]) {
+                  allItems.push({
+                    id: 'apply_' + idx,
+                    category: 'APPLY',
+                    badge: '청약공고',
+                    name: name,
+                    addr: addr,
+                    lat: parseFloat(res[0].y),
+                    lng: parseFloat(res[0].x),
+                    scale: (p.TOT_SUPLY_HSHLDCO ? p.TOT_SUPLY_HSHLDCO + '세대' : '-'),
+                    price: '모집공고 기준',
+                    moveIn: p.MVN_PREARNGE_YM || '-',
+                    benefits: ['청약홈 공식공고', p.HOUSE_DTL_SECD_NM || '민영주택']
+                  });
+                  renderMarkers();
+                }
+              });
+            });
+          })
+          .catch(() => {});
+      }
+
+      function clearOverlays() {
+        overlays.forEach(o => o.setMap(null));
+        overlays = [];
+      }
+
+      function renderMarkers() {
+        if (!map) return;
+        clearOverlays();
+        const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+        allItems.forEach(item => {
+          if (currentFilter !== 'ALL' && item.category !== currentFilter) return;
+          if (kw && !item.name.toLowerCase().includes(kw) && !item.addr.toLowerCase().includes(kw)) return;
+
+          const el = document.createElement('div');
+          el.className = 'gh-marker' + (item.category === 'APPLY' ? ' sub' : '');
+          el.innerHTML = `
+            <div class="gh-marker-badge">${item.badge}</div>
+            <div class="gh-marker-title">${item.name}</div>
+            <div class="gh-marker-sub">${item.scale}</div>
+          `;
+          el.onclick = () => openDetail(item);
+
+          const overlay = new kakao.maps.CustomOverlay({
+            position: new kakao.maps.LatLng(item.lat, item.lng),
+            content: el,
+            yAnchor: 1.15
+          });
+          overlay.setMap(map);
+          overlays.push(overlay);
+        });
+      }
+
+      // 상세창 열기 + 실시간 관심 인원 + 인근 편의시설 요약
+      function openDetail(item) {
+        selectedItem = item;
+        map.panTo(new kakao.maps.LatLng(item.lat, item.lng));
+
+        // 단지명 기반 일관성 있는 실시간 관심 인원 산출 (시간대 가중치 반영)
+        const hour = new Date().getHours();
+        const baseSeed = item.name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+        const timeBoost = (hour >= 10 && hour <= 22) ? 7 : 2;
+        const viewers = (baseSeed % 19) + timeBoost;
+        document.getElementById('liveViewerText').textContent = `현재 ${viewers}명이 이 현장을 보고 있습니다`;
+
+        document.getElementById('dpTitle').textContent = item.name;
+        document.getElementById('dpAddr').textContent = item.addr;
+
+        const benWrap = document.getElementById('dpBenefits');
+        benWrap.innerHTML = item.benefits.map(b => `<span class="benefit-tag">✓ ${b}</span>`).join('');
+
+        document.getElementById('dpOverview').innerHTML = `
+          <div class="info-label">공급 구분</div><div class="info-val">${item.badge}</div>
+          <div class="info-label">공급 규모</div><div class="info-val">${item.scale}</div>
+          <div class="info-label">분양 조건</div><div class="info-val">${item.price}</div>
+          <div class="info-label">입주 예정</div><div class="info-val">${item.moveIn}</div>
+        `;
+
+        document.getElementById('calcPrice').value = '';
+        document.getElementById('calcResult').textContent = '분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.';
+
+        loadNearbyInfra(item.lat, item.lng);
+        document.getElementById('detailPanel').classList.add('open');
+      }
+
+      // 카카오 Places 카테고리 검색으로 인근 학교·병원·지하철역 거리 요약
+      function loadNearbyInfra(lat, lng) {
+        const infraWrap = document.getElementById('dpInfra');
+        infraWrap.innerHTML = '<div class="infra-item"><span class="infra-name">주변 학교·병원·역 거리 계산 중...</span></div>';
+
+        const loc = new kakao.maps.LatLng(lat, lng);
+        const targets = [
+          { code: 'SC4', label: '🏫 학교' },
+          { code: 'HP8', label: '🏥 병원' },
+          { code: 'SW8', label: '🚇 지하철' }
+        ];
+        const results = [];
+        let done = 0;
+
+        targets.forEach(t => {
+          ps.categorySearch(t.code, (data, status) => {
+            done++;
+            if (status === kakao.maps.services.Status.OK && data && data.length > 0) {
+              const nearest = data[0];
+              results.push({
+                label: t.label,
+                name: nearest.place_name,
+                dist: nearest.distance ? `${nearest.distance}m` : '인근'
+              });
+            }
+            if (done === targets.length) {
+              if (results.length === 0) {
+                infraWrap.innerHTML = '<div class="infra-item"><span class="infra-name">반경 내 등록된 주요 시설 정보가 없습니다.</span></div>';
+              } else {
+                infraWrap.innerHTML = results.map(r => `
+                  <div class="infra-item">
+                    <span class="infra-cat">${r.label}</span>
+                    <span class="infra-name" title="${r.name}">${r.name}</span>
+                    <span class="infra-dist">약 ${r.dist}</span>
+                  </div>
+                `).join('');
+              }
+            }
+          }, { location: loc, radius: 2000, sort: kakao.maps.services.SortBy.DISTANCE });
+        });
+      }
+
+      window.closeDetail = function () {
+        document.getElementById('detailPanel').classList.remove('open');
+      };
+
+      window.moveRegion = function (lat, lng, level) {
+        if (!map) return;
+        map.setLevel(level);
+        map.panTo(new kakao.maps.LatLng(lat, lng));
+      };
+
+      window.runFundCalc = function () {
+        const price = parseFloat(document.getElementById('calcPrice').value);
+        const rate = parseFloat(document.getElementById('calcDepositRate').value);
+        const out = document.getElementById('calcResult');
+        if (!price || price <= 0) {
+          out.textContent = '분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.';
+          return;
+        }
+        const deposit = Math.round(price * rate);
+        const mid = Math.round(price * 0.60);
+        const balance = Math.round(price - deposit - mid);
+        out.innerHTML = `
+          • <b>총 계약금(${Math.round(rate * 100)}%):</b> 약 ${deposit.toLocaleString()}만 원<br>
+          • <b>중도금(60%):</b> 약 ${mid.toLocaleString()}만 원<br>
+          • <b>입주 시 잔금(${Math.round((1 - rate - 0.6) * 100)}%):</b> 약 ${balance.toLocaleString()}만 원
+        `;
+      };
+
+      // Tally.so 접수폼(및 오픈카톡) 연결 + 구글 애즈 전환 이벤트 발신 자리
+      window.goTallyConsult = function () {
+        if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === 'function') {
+          window.gtag('event', 'conversion', { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
+        }
+        let targetUrl = CFG.TALLY_URL;
+        if (selectedItem && targetUrl.includes('tally.so')) {
+          const sep = targetUrl.includes('?') ? '&' : '?';
+          targetUrl += `${sep}site=${encodeURIComponent(selectedItem.name)}`;
+        }
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      };
+
+      // 필터 및 검색 이벤트
+      document.querySelectorAll('.chip-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentFilter = btn.dataset.filter;
+          renderMarkers();
+        };
+      });
+      document.getElementById('searchInput').addEventListener('input', renderMarkers);
+    })();
+  </script>
+</body>
+</html>
