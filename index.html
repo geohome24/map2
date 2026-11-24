@@ -209,7 +209,7 @@
   <script>
     (function () {
       // 1. 허용 도메인 잠금
-      const allowedHosts = ['geohome24.github.io', 'sites.google.com', 'googleusercontent.com', 'script.google.com', 'localhost', '127.0.0.1'];
+      const allowedHosts = ['geohome24.github.io', 'sites.google.com', 'googleusercontent.com', 'gstatic.com', 'script.google.com', 'localhost', '127.0.0.1'];
       const currentHost = window.location.hostname || '';
       const isAllowed = allowedHosts.some(h => currentHost.includes(h)) || currentHost === '';
       if (!isAllowed) {
@@ -259,6 +259,7 @@
           center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
           level: 12
         });
+        setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 400);
         ps = new kakao.maps.services.Places();
         geocoder = new kakao.maps.services.Geocoder();
 
