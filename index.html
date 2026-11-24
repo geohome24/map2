@@ -274,15 +274,6 @@ function initMap() {
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
 }
-    
-        // 앱스 스크립트 & 청약홈 API 독립 호출 (Promise.all 금지)
-        fetchSheetData();
-        fetchApplyHomeData();
-      }
-
-      // 시트 직영 분양 데이터 호출
-      function fetchSheetData() {
-        fetch(CFG.GAS_URL)
           .then(res => res.json())
           .then(data => {
             const rows = Array.isArray(data) ? data : (data.data || []);
