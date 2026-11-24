@@ -2,414 +2,476 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>지오홈 (GEOHOME) | 전국 분양 현장 실시간 비교 지도</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>분양 현장 지도 · 상담 안내</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif; background: #f4f6f9; color: #1e293b; }
-    #map { width: 100%; height: 100%; position: relative; z-index: 1; }
-
-    /* 상단 통합 검색 및 필터 바 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      background: #f5f6f8;
+      color: #1f2937;
+    }
+    .app-wrap {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      min-height: 620px;
+      position: relative;
+    }
     .top-bar {
-      position: fixed; top: 12px; left: 12px; right: 12px; z-index: 20;
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-      pointer-events: none;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid #e5e7eb;
+      z-index: 20;
     }
-    .search-box, .filter-group, .region-group {
-      pointer-events: auto; background: rgba(255, 255, 255, 0.96);
-      border: 1px solid #e2e8f0; border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
-      padding: 6px 10px; display: flex; align-items: center; gap: 6px;
-    }
-    .search-box input {
-      border: none; outline: none; font-size: 13px; width: 170px; background: transparent; color: #0f172a;
-      -webkit-user-select: text; user-select: text;
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
     }
     .chip-btn {
-      border: 1px solid #cbd5e1; background: #fff; color: #334155;
-      font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      color: #374151;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
     }
-    .chip-btn.active { background: #dc2626; color: #fff; border-color: #dc2626; }
-    .region-btn {
-      border: none; background: #f1f5f9; color: #334155;
-      font-size: 11.5px; font-weight: 600; padding: 5px 8px; border-radius: 7px; cursor: pointer;
+    .chip-btn.active {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #ffffff;
     }
-    .region-btn:hover { background: #e2e8f0; }
-
-    /* 커스텀 마커 스타일 */
-    .gh-marker {
-      background: #ffffff; border: 2px solid #dc2626; border-radius: 10px;
-      padding: 4px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
-      cursor: pointer; text-align: center; transition: transform 0.15s;
-      min-width: 92px;
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 220px;
+      max-width: 340px;
     }
-    .gh-marker:hover { transform: translateY(-3px) scale(1.03); z-index: 999; }
-    .gh-marker.sub { border-color: #2563eb; }
-    .gh-marker-badge {
-      display: inline-block; font-size: 10px; font-weight: 700; color: #fff;
-      background: #dc2626; padding: 1px 5px; border-radius: 4px; margin-bottom: 2px;
+    #searchInput {
+      width: 100%;
+      padding: 7px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
     }
-    .gh-marker.sub .gh-marker-badge { background: #2563eb; }
-    .gh-marker-title { font-size: 11.5px; font-weight: 700; color: #0f172a; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
-    .gh-marker-sub { font-size: 10px; color: #64748b; margin-top: 1px; }
-
-    /* 우측/하단 상세 모달 패널 */
-    .detail-panel {
-      position: fixed; top: 68px; right: 14px; bottom: 44px; width: 370px; max-width: calc(100vw - 28px);
-      background: #ffffff; border-radius: 16px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-      border: 1px solid #e2e8f0; z-index: 30; display: none; flex-direction: column; overflow: hidden;
+    #searchInput:focus {
+      border-color: #1d4ed8;
     }
-    .detail-panel.open { display: flex; }
-    .dp-header {
-      padding: 16px 18px 12px; border-bottom: 1px solid #f1f5f9; position: relative; background: #fff;
+    .contact-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1e3a8a;
+      background: #eff6ff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
     }
-    .dp-close {
-      position: absolute; top: 14px; right: 14px; width: 28px; height: 28px;
-      border: none; background: #f1f5f9; border-radius: 50%; font-size: 15px; cursor: pointer; color: #475569;
+    .map-stage {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-height: 460px;
     }
-    .live-viewers {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
-      font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 460px;
+      background: #e5e7eb;
     }
-    .live-dot { width: 7px; height: 7px; background: #dc2626; border-radius: 50%; animation: pulse 1.3s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-    .dp-title { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.3; padding-right: 28px; }
-    .dp-addr { font-size: 12px; color: #64748b; margin-top: 4px; }
-    .benefit-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
-    .benefit-tag {
-      background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
-      font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    .info-panel {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      width: 340px;
+      max-width: calc(100vw - 28px);
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14);
+      padding: 16px;
+      z-index: 30;
+      display: none;
     }
-
-    .dp-body { padding: 14px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
-    .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
-    .info-card h4 { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
-    .info-grid { display: grid; grid-template-columns: 82px 1fr; row-gap: 6px; font-size: 12.5px; }
-    .info-label { color: #64748b; font-weight: 600; }
-    .info-val { color: #0f172a; font-weight: 600; }
-
-    /* 인근 편의시설 요약 리스트 */
-    .infra-list { display: flex; flex-direction: column; gap: 6px; }
-    .infra-item {
-      display: flex; justify-content: space-between; align-items: center;
-      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; font-size: 12px;
+    .info-panel.show {
+      display: block;
     }
-    .infra-cat { font-weight: 700; color: #334155; }
-    .infra-name { color: #0f172a; font-weight: 600; max-width: 165px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .infra-dist { font-weight: 800; color: #dc2626; font-size: 11.5px; }
-
-    /* 초기 자금 간편 계산기 */
-    .calc-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
-    .calc-row input {
-      flex: 1; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12.5px;
-      -webkit-user-select: text; user-select: text;
+    .info-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
     }
-    .calc-row select { padding: 7px 6px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; background: #fff; }
-    .calc-res { background: #fff; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.6; }
-
-    .dp-footer { padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #fff; display: flex; flex-direction: column; gap: 6px; }
-    .cta-btn {
-      width: 100%; padding: 12px; border: none; border-radius: 10px;
-      background: #dc2626; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    .info-status {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      margin-bottom: 6px;
     }
-    .cta-btn:hover { background: #b91c1c; }
-
-    /* 하단 고정 안내 바 */
-    .bottom-bar {
-      position: fixed; bottom: 8px; left: 12px; right: 12px; z-index: 15;
-      display: flex; justify-content: space-between; align-items: center; pointer-events: none;
-      font-size: 11px; color: #475569;
+    .info-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.35;
     }
-    .watermark-pill {
-      pointer-events: auto; background: rgba(255,255,255,0.92); border: 1px solid #e2e8f0;
-      padding: 4px 10px; border-radius: 8px; font-weight: 600;
+    .close-btn {
+      border: none;
+      background: #f3f4f6;
+      color: #4b5563;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
     }
-
-    @media (max-width: 640px) {
-      .detail-panel { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; max-height: 72vh; }
-      .search-box input { width: 125px; }
+    .info-meta {
+      font-size: 13px;
+      color: #4b5563;
+      line-height: 1.6;
+      margin: 10px 0 14px;
+    }
+    .consult-btn {
+      width: 100%;
+      padding: 11px 14px;
+      border: none;
+      border-radius: 8px;
+      background: #1d4ed8;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .consult-btn:hover {
+      background: #1e40af;
     }
   </style>
 </head>
 <body>
-
-  <!-- 상단 필터 및 지역 빠른 이동 -->
-  <div class="top-bar">
-    <div class="search-box">
-      <span>🔍</span>
-      <input type="text" id="searchInput" placeholder="분양 단지명 또는 지역 검색" />
-    </div>
-    <div class="filter-group">
-      <button class="chip-btn active" data-filter="ALL">전체 분양</button>
-      <button class="chip-btn" data-filter="DIRECT">선착순·미분양</button>
-      <button class="chip-btn" data-filter="APPLY">청약공고</button>
-    </div>
-    <div class="region-group">
-      <button class="region-btn" onclick="moveRegion(36.35, 127.85, 12)">전국</button>
-      <button class="region-btn" onclick="moveRegion(37.5665, 126.9780, 9)">수도권</button>
-      <button class="region-btn" onclick="moveRegion(35.1796, 129.0756, 8)">부산·경남</button>
-      <button class="region-btn" onclick="moveRegion(35.8714, 128.6014, 9)">대구·경북</button>
-      <button class="region-btn" onclick="moveRegion(36.3504, 127.3845, 9)">대전·충청</button>
-      <button class="region-btn" onclick="moveRegion(35.1595, 126.8526, 9)">광주·전라</button>
-    </div>
-  </div>
-
-  <!-- 지도 영역 -->
-  <div id="map"></div>
-
-  <!-- 현장 상세 정보 모달 -->
-  <aside class="detail-panel" id="detailPanel">
-    <div class="dp-header">
-      <button class="dp-close" onclick="closeDetail()">✕</button>
-      <div class="live-viewers"><span class="live-dot"></span><span id="liveViewerText">현재 12명이 이 현장을 보고 있습니다</span></div>
-      <div class="dp-title" id="dpTitle">단지명</div>
-      <div class="dp-addr" id="dpAddr">주소 정보</div>
-      <div class="benefit-row" id="dpBenefits"></div>
-    </div>
-
-    <div class="dp-body">
-      <div class="info-card">
-        <h4>📋 핵심 분양 개요</h4>
-        <div class="info-grid" id="dpOverview"></div>
+  <div class="app-wrap">
+    <div class="top-bar">
+      <div class="filter-group">
+        <button type="button" class="chip-btn active" data-filter="all">전체</button>
+        <button type="button" class="chip-btn" data-filter="선착순·미분양">선착순·미분양</button>
+        <button type="button" class="chip-btn" data-filter="청약일정">청약일정</button>
       </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="단지명, 지역, 주소 검색" />
+      </div>
+      <div class="contact-badge">상담문의 010.3974.7087</div>
+    </div>
 
-      <div class="info-card">
-        <h4>🏫 인근 편의시설 요약 <span style="font-size:11px;font-weight:500;color:#64748b;">직선거리 기준</span></h4>
-        <div class="infra-list" id="dpInfra">
-          <div class="infra-item"><span class="infra-name">주변 시설 정보를 불러오는 중...</span></div>
+    <div class="map-stage">
+      <div id="map"></div>
+    </div>
+
+    <aside id="infoPanel" class="info-panel" aria-live="polite">
+      <div class="info-header">
+        <div>
+          <span id="panelStatus" class="info-status">선착순·미분양</span>
+          <h2 id="panelTitle" class="info-title">현장명</h2>
         </div>
+        <button type="button" id="closePanelBtn" class="close-btn" aria-label="닫기">×</button>
       </div>
-
-      <div class="info-card">
-        <h4>💰 초기 자금(계약금·잔금) 간편 계산기</h4>
-        <div class="calc-row">
-          <input type="number" id="calcPrice" placeholder="분양가 입력 (단위: 만원, 예: 55000)" oninput="runFundCalc()" />
-          <select id="calcDepositRate" onchange="runFundCalc()">
-            <option value="0.05">계약금 5%</option>
-            <option value="0.10" selected>계약금 10%</option>
-          </select>
-        </div>
-        <div class="calc-res" id="calcResult">분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.</div>
-      </div>
-    </div>
-
-    <div class="dp-footer">
-      <button class="cta-btn" id="dpCtaBtn" onclick="goTallyConsult()">1:1 맞춤 상담 및 모델하우스 방문 예약 →</button>
-    </div>
-  </aside>
-
-  <!-- 하단 워터마크 -->
-  <div class="bottom-bar">
-    <div class="watermark-pill">지오홈 (GEOHOME) 분양현장 전용 지도 | 선착순·미분양 문의 010.3974.7087 </div>
+      <div id="panelMeta" class="info-meta"></div>
+      <button type="button" id="panelConsultBtn" class="consult-btn" onclick="goTallyConsult()">상담 문의하기</button>
+    </aside>
   </div>
 
   <script>
     (function () {
-      // 1. 허용 도메인 잠금
-      const allowedHosts = ['geohome24.github.io', 'sites.google.com', 'googleusercontent.com', 'gstatic.com', 'script.google.com', 'localhost', '127.0.0.1'];
-      const currentHost = window.location.hostname || '';
-      const isAllowed = allowedHosts.some(h => currentHost.includes(h)) || currentHost === '';
-      if (!isAllowed) {
-        document.body.innerHTML = '<div style="padding:40px;text-align:center;font-weight:700;">허용되지 않은 도메인 접근입니다.</div>';
-        return;
-      }
-
-      // 2. 우클릭 및 개발자도구 단축키 차단
-      document.addEventListener('contextmenu', e => e.preventDefault());
-      document.addEventListener('keydown', e => {
-        if (
-          e.key === 'F12' ||
-          (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
-          (e.ctrlKey && ['U', 'S'].includes(e.key.toUpperCase()))
-        ) {
-          e.preventDefault();
-        }
-      });
-
-      // 3. 민감 키/URL 이중 Base64 난독화 디코더
-      const d2 = (s) => atob(atob(s));
       const CFG = {
-        KAKAO_KEY: d2('TkRJMU5UTXlORFF4T0RkbU0yUTBNMkl3TVdZNU9HRTBORGsyT0RRMk1HWmtZdz09'),
-        GAS_URL: d2('YUhSMGNITTZMeTl6WTNKcGNIUXVaMjl2WjJ4bExtTnZiUzl0WVdOeWIzTXZjeTlCUzJaNWMySjRNR0pxUmxoclZqWTBjbEZYT1RBeU1sQkhUR3RXUkVaMmFtMXhkR1ZuTVV0bU5YVnFRMk5VYW5oU1R5OWxlR1ZqUDIxdlpHVTlaR0YwWVE9PQ=='),
-        APPLY_API: d2('YUhSMGNITTZMeTloY0drdWIyUnNiM1ZrTG10eUwyeHZZV2t2UVhCd2JIbG9iMjFsU1c1bWJ6UmxkR0ZwYkZOMll5OTJNUzlCWkZSTGJtOXljbEZ2Y0ZSb2JHNHZaMlYwUVZCVVRHeDBkRzkwU0d4aGJtTmtSVzV2YkZCUk1qUXhNRFEyTkRFMU9EY3dOUT09'),
-        // ★ 추후 Tally.so 접수폼 링크 생성 후 아래 주소만 교체하세요 (현재는 오픈카톡 직통 연결)
-        TALLY_URL: 'https://open.kakao.com/o/ss9n3rXi',
-        // ★ 추후 구글 애즈 전환 번호 발급 시 'AW-XXXXXXXXX/YYYYYYYY' 형태로 입력하세요
-        GOOGLE_ADS_CONVERSION_ID: ''
+        KAKAO_KEY: "",
+        GAS_URL: "",
+        APPLY_API: "",
+        TALLY_URL: "",
+        GOOGLE_ADS_CONVERSION_ID: ""
       };
 
-      let map, ps, geocoder;
+      let map = null;
+      let ps = null;
+      let geocoder = null;
       let allItems = [];
-      let overlays = [];
-      let currentFilter = 'ALL';
+      let markers = [];
+      let currentFilter = "all";
       let selectedItem = null;
 
-      // 카카오맵 SDK 동적 로드 (Places 라이브러리 포함)
-    const sdk = document.createElement('script');
-    sdk.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CFG.KAKAO_KEY}&libraries=services&autoload=false`;
-    sdk.onload = () => {
-      if (window.kakao && kakao.maps) {
-        kakao.maps.load(initMap);
-      } else {
-        document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 객체를 불러오지 못했습니다. 앱 키와 도메인 설정을 확인해 주세요.</div>';
+      function showMapMessage(msg) {
+        const mapEl = document.getElementById("map");
+        if (!mapEl) return;
+        mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#374151;font-size:14px;line-height:1.6;">' + msg + "</div>";
       }
-    };
-    sdk.onerror = () => {
-      document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 스크립트 접속이 차단되었습니다.</div>';
-    };
-    document.head.appendChild(sdk);
 
-    function initMap() {
-      const container = document.getElementById('map');
-      if (!container || !window.kakao || !kakao.maps) return;
-      map = new kakao.maps.Map(container, {
-        center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
-        level: 12
-      });
-      setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 600);
-      setInterval(() => { if (map) map.relayout(); }, 2500);
-      ps = new kakao.maps.services.Places();
-      geocoder = new kakao.maps.services.Geocoder();
+      function initMap() {
+        const container = document.getElementById("map");
+        if (!container || !window.kakao || !window.kakao.maps) {
+          showMapMessage("카카오맵 객체를 불러오지 못했습니다. JavaScript 키와 허용 도메인(https://geohome24.github.io)을 확인해 주세요.");
+          return;
+        }
 
-      fetchSheetData();
-      if (typeof fetchApplyHomeData === 'function') {
+        const centerLatLng = new kakao.maps.LatLng(36.35, 127.85);
+        map = new kakao.maps.Map(container, {
+          center: centerLatLng,
+          level: 12
+        });
+
+        if (kakao.maps.services) {
+          ps = new kakao.maps.services.Places();
+          geocoder = new kakao.maps.services.Geocoder();
+        }
+
+        const refreshLayout = function () {
+          if (!map) return;
+          map.relayout();
+        };
+
+        setTimeout(refreshLayout, 300);
+        setTimeout(refreshLayout, 900);
+        setInterval(refreshLayout, 2500);
+
+        fetchSheetData();
         fetchApplyHomeData();
       }
-    }
 
-    // 구글 스프레드시트(앱스 스크립트) 데이터 호출
-    function fetchSheetData() {
-      if (!CFG.GAS_URL) return;
-      fetch(CFG.GAS_URL)
-        .then(res => res.json())
-        .then(data => {
-          const rows = Array.isArray(data) ? data : (data.data || []);
-          rows.forEach((r, idx) => {
-            const status = String(r['구분'] || r['상태'] || r.type || '').trim();
-            if (status.includes('입주') || status.includes('매매') || status.includes('제휴')) return;
+      function clearMarkers() {
+        markers.forEach(function (m) {
+          m.setMap(null);
+        });
+        markers = [];
+      }
 
-            const name = r['단지명'] || r['현장명'] || r.name || '';
-            const addr = r['주소'] || r['위치'] || r.address || '';
-            const lat = parseFloat(r['위도'] || r.lat);
-            const lng = parseFloat(r['경도'] || r.lng);
-            const region = r['지역'] || r.region || '';
-            const price = r['분양가'] || r.price || '';
-            const scale = r['세대수'] || r.scale || '';
-            const moveIn = r['입주시기'] || r.moveIn || '';
-            const note = r['특이사항'] || r['비고'] || r.note || '';
+      function openDetailPanel(item) {
+        selectedItem = item;
+        const panel = document.getElementById("infoPanel");
+        const statusEl = document.getElementById("panelStatus");
+        const titleEl = document.getElementById("panelTitle");
+        const metaEl = document.getElementById("panelMeta");
 
-            if (!name) return;
+        if (!panel || !statusEl || !titleEl || !metaEl) return;
 
-            const item = {
-              id: `sheet_${idx}`,
-              source: 'sheet',
-              status: status || '선착순·미분양',
-              name,
-              addr,
-              lat,
-              lng,
-              region,
-              price,
-              scale,
-              moveIn,
-              note
-            };
+        statusEl.textContent = item.status || "선착순·미분양";
+        titleEl.textContent = item.name || "현장 정보";
 
-            if (!isNaN(lat) && !isNaN(lng)) {
+        const lines = [];
+        if (item.region) lines.push("지역: " + item.region);
+        if (item.addr) lines.push("위치: " + item.addr);
+        if (item.price) lines.push("분양가: " + item.price);
+        if (item.scale) lines.push("세대수: " + item.scale);
+        if (item.moveIn) lines.push("입주시기: " + item.moveIn);
+        if (item.note) lines.push("안내: " + item.note);
+        lines.push("직통문의: 010.3974.7087");
+
+        metaEl.innerHTML = lines.join("<br />");
+        panel.classList.add("show");
+      }
+
+      function renderMarkers() {
+        if (!map || !window.kakao || !window.kakao.maps) return;
+        clearMarkers();
+
+        const searchEl = document.getElementById("searchInput");
+        const keyword = searchEl ? searchEl.value.trim().toLowerCase() : "";
+
+        const filtered = allItems.filter(function (item) {
+          const matchFilter = currentFilter === "all" || (item.status && item.status.includes(currentFilter));
+          if (!matchFilter) return false;
+          if (!keyword) return true;
+          const hay = [item.name, item.addr, item.region, item.status].join(" ").toLowerCase();
+          return hay.includes(keyword);
+        });
+
+        filtered.forEach(function (item) {
+          const lat = parseFloat(item.lat);
+          const lng = parseFloat(item.lng);
+          if (isNaN(lat) || isNaN(lng)) return;
+
+          const position = new kakao.maps.LatLng(lat, lng);
+          const marker = new kakao.maps.Marker({
+            map: map,
+            position: position,
+            title: item.name
+          });
+
+          kakao.maps.event.addListener(marker, "click", function () {
+            openDetailPanel(item);
+          });
+
+          markers.push(marker);
+        });
+      }
+
+      function pushItemWithGeocode(item) {
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          item.lat = lat;
+          item.lng = lng;
+          allItems.push(item);
+          renderMarkers();
+          return;
+        }
+
+        if (item.addr && geocoder && kakao.maps && kakao.maps.services) {
+          geocoder.addressSearch(item.addr, function (result, status) {
+            if (status === kakao.maps.services.Status.OK && result && result[0]) {
+              item.lat = parseFloat(result[0].y);
+              item.lng = parseFloat(result[0].x);
               allItems.push(item);
               renderMarkers();
-            } else if (addr && geocoder) {
-              geocoder.addressSearch(addr, (res, st) => {
-                if (st === kakao.maps.services.Status.OK && res[0]) {
-                  item.lat = parseFloat(res[0].y);
-                  item.lng = parseFloat(res[0].x);
-                  allItems.push(item);
-                  renderMarkers();
-                }
-              });
             }
           });
-        })
-        .catch(() => {});
-    }
+        }
+      }
 
-    // 청약홈 신규 공고 데이터 독립 호출
-    function fetchApplyHomeData() {
-      if (!CFG.APPLY_API) return;
-      fetch(CFG.APPLY_API)
-        .then(res => res.json())
-        .then(json => {
-          const list = Array.isArray(json) ? json : (json.data || []);
-          list.forEach((r, idx) => {
-            const name = r['단지명'] || r['주택명'] || r.HOUSE_NM || r.name || '';
-            const addr = r['주소'] || r['공급위치'] || r.HSSPLY_ADRES || r.address || '';
-            if (!name) return;
+      function fetchSheetData() {
+        if (!CFG.GAS_URL) return;
+        fetch(CFG.GAS_URL)
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            const rows = Array.isArray(data) ? data : (data.data || []);
+            rows.forEach(function (r, idx) {
+              const status = String(r["구분"] || r["상태"] || r.type || "").trim();
+              if (status.includes("입주") || status.includes("매매") || status.includes("제휴")) return;
 
-            const item = {
-              id: `apply_${idx}`,
-              source: 'apply',
-              status: '청약일정',
-              name,
-              addr,
-              lat: parseFloat(r['위도'] || r.lat),
-              lng: parseFloat(r['경도'] || r.lng),
-              region: r['지역'] || r['공급지역명'] || r.SUBSCRPT_AREA_CODE_NM || '',
-              price: r['분양가'] || r.price || '',
-              scale: r['세대수'] || r['총공급세대수'] || r.TOT_SUPLY_HSHLDCO || '',
-              moveIn: r['입주시기'] || r['입주예정월'] || r.MVN_PREARNGE_YM || '',
-              note: r['특이사항'] || r.note || ''
-            };
+              const name = r["단지명"] || r["현장명"] || r.name || "";
+              if (!name) return;
 
-            if (!isNaN(item.lat) && !isNaN(item.lng)) {
-              allItems.push(item);
-              renderMarkers();
-            } else if (addr && geocoder) {
-              geocoder.addressSearch(addr, (res, st) => {
-                if (st === kakao.maps.services.Status.OK && res[0]) {
-                  item.lat = parseFloat(res[0].y);
-                  item.lng = parseFloat(res[0].x);
-                  allItems.push(item);
-                  renderMarkers();
-                }
+              pushItemWithGeocode({
+                id: "sheet_" + idx,
+                source: "sheet",
+                status: status || "선착순·미분양",
+                name: name,
+                addr: r["주소"] || r["위치"] || r.address || "",
+                lat: r["위도"] || r.lat,
+                lng: r["경도"] || r.lng,
+                region: r["지역"] || r.region || "",
+                price: r["분양가"] || r.price || "",
+                scale: r["세대수"] || r.scale || "",
+                moveIn: r["입주시기"] || r.moveIn || "",
+                note: r["특이사항"] || r["비고"] || r.note || ""
               });
-            }
-          });
-        })
-        .catch(() => {});
-    }
+            });
+          })
+          .catch(function () {});
+      }
 
-    // 상담 문의 이동
-    window.goTallyConsult = function () {
-      if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === 'function') {
-        window.gtag('event', 'conversion', { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
-      }
-      let targetUrl = CFG.TALLY_URL;
-      if (selectedItem && targetUrl && targetUrl.includes('tally.so')) {
-        const sep = targetUrl.includes('?') ? '&' : '?';
-        targetUrl += `${sep}site=${encodeURIComponent(selectedItem.name)}`;
-      }
-      if (targetUrl) {
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      }
-    };
+      function fetchApplyHomeData() {
+        if (!CFG.APPLY_API) return;
+        fetch(CFG.APPLY_API)
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (json) {
+            const list = Array.isArray(json) ? json : (json.data || []);
+            list.forEach(function (r, idx) {
+              const name = r["단지명"] || r["주택명"] || r.HOUSE_NM || r.name || "";
+              if (!name) return;
 
-    // 필터 및 검색 이벤트
-    document.querySelectorAll('.chip-btn').forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        renderMarkers();
+              pushItemWithGeocode({
+                id: "apply_" + idx,
+                source: "apply",
+                status: "청약일정",
+                name: name,
+                addr: r["주소"] || r["공급위치"] || r.HSSPLY_ADRES || r.address || "",
+                lat: r["위도"] || r.lat,
+                lng: r["경도"] || r.lng,
+                region: r["지역"] || r["공급지역명"] || r.SUBSCRPT_AREA_CODE_NM || "",
+                price: r["분양가"] || r.price || "",
+                scale: r["세대수"] || r["총공급세대수"] || r.TOT_SUPLY_HSHLDCO || "",
+                moveIn: r["입주시기"] || r["입주예정월"] || r.MVN_PREARNGE_YM || "",
+                note: r["특이사항"] || r.note || ""
+              });
+            });
+          })
+          .catch(function () {});
+      }
+
+      window.goTallyConsult = function () {
+        if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === "function") {
+          window.gtag("event", "conversion", { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
+        }
+        let targetUrl = CFG.TALLY_URL;
+        if (!targetUrl) {
+          alert("상담문의 010.3974.7087 으로 연락 주시거나 Tally 접수 폼 URL을 연결해 주세요.");
+          return;
+        }
+        if (selectedItem && selectedItem.name && targetUrl.includes("tally.so")) {
+          const sep = targetUrl.includes("?") ? "&" : "?";
+          targetUrl += sep + "site=" + encodeURIComponent(selectedItem.name);
+        }
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
       };
-    });
 
-    const searchInputEl = document.getElementById('searchInput');
-    if (searchInputEl) {
-      searchInputEl.addEventListener('input', renderMarkers);
-    }
+      document.querySelectorAll(".chip-btn").forEach(function (btn) {
+        btn.onclick = function () {
+          document.querySelectorAll(".chip-btn").forEach(function (b) {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+          currentFilter = btn.dataset.filter || "all";
+          renderMarkers();
+        };
+      });
+
+      const searchInputEl = document.getElementById("searchInput");
+      if (searchInputEl) {
+        searchInputEl.addEventListener("input", renderMarkers);
+      }
+
+      const closePanelBtn = document.getElementById("closePanelBtn");
+      if (closePanelBtn) {
+        closePanelBtn.addEventListener("click", function () {
+          const panel = document.getElementById("infoPanel");
+          if (panel) panel.classList.remove("show");
+        });
+      }
+
+      function loadKakaoSdk() {
+        if (!CFG.KAKAO_KEY) {
+          showMapMessage("CFG.KAKAO_KEY에 카카오맵 JavaScript 키를 입력한 뒤 저장해 주세요.");
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=" + encodeURIComponent(CFG.KAKAO_KEY) + "&libraries=services&autoload=false";
+        script.onload = function () {
+          if (window.kakao && window.kakao.maps) {
+            window.kakao.maps.load(initMap);
+          } else {
+            showMapMessage("카카오맵 SDK 초기화에 실패했습니다. 카카오 개발자 콘솔에서 플랫폼 도메인을 확인해 주세요.");
+          }
+        };
+        script.onerror = function () {
+          showMapMessage("카카오맵 스크립트를 불러오지 못했습니다. 네트워크나 도메인 등록 상태를 확인해 주세요.");
+        };
+        document.head.appendChild(script);
+      }
+
+      loadKakaoSdk();
+    })();
   </script>
 </body>
 </html>
