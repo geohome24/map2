@@ -274,7 +274,6 @@
       ps = new kakao.maps.services.Places();
       geocoder = new kakao.maps.services.Geocoder();
 
-      // 앱스 스크립트 & 청약홈 API 독립 호출
       fetchSheetData();
       if (typeof fetchApplyHomeData === 'function') {
         fetchApplyHomeData();
@@ -290,7 +289,6 @@
           const rows = Array.isArray(data) ? data : (data.data || []);
           rows.forEach((r, idx) => {
             const status = String(r['구분'] || r['상태'] || r.type || '').trim();
-            // 입주완료·일반매물·제휴 제외, 분양 현장만 수용
             if (status.includes('입주') || status.includes('매매') || status.includes('제휴')) return;
 
             const name = r['단지명'] || r['현장명'] || r.name || '';
@@ -337,199 +335,81 @@
         })
         .catch(() => {});
     }
-      // 청약홈 신규 공고 데이터 독립 호출
-      function fetchApplyHomeData() {
-        fetch(CFG.APPLY_API)
-          .then(res => res.json())
-          .then(json => {
-            const list = (json && json.data) ? json.data : [];
-            const recent = list.slice(0, 60); // 최신 분양 공고 중심
-            recent.forEach((p, idx) => {
-              const name = p.HOUSE_NM || '';
-              const addr = p.HSSPLY_ADRES || '';
-              if (!name || !addr) return;
 
+    // 청약홈 신규 공고 데이터 독립 호출
+    function fetchApplyHomeData() {
+      if (!CFG.APPLY_API) return;
+      fetch(CFG.APPLY_API)
+        .then(res => res.json())
+        .then(json => {
+          const list = Array.isArray(json) ? json : (json.data || []);
+          list.forEach((r, idx) => {
+            const name = r['단지명'] || r['주택명'] || r.HOUSE_NM || r.name || '';
+            const addr = r['주소'] || r['공급위치'] || r.HSSPLY_ADRES || r.address || '';
+            if (!name) return;
+
+            const item = {
+              id: `apply_${idx}`,
+              source: 'apply',
+              status: '청약일정',
+              name,
+              addr,
+              lat: parseFloat(r['위도'] || r.lat),
+              lng: parseFloat(r['경도'] || r.lng),
+              region: r['지역'] || r['공급지역명'] || r.SUBSCRPT_AREA_CODE_NM || '',
+              price: r['분양가'] || r.price || '',
+              scale: r['세대수'] || r['총공급세대수'] || r.TOT_SUPLY_HSHLDCO || '',
+              moveIn: r['입주시기'] || r['입주예정월'] || r.MVN_PREARNGE_YM || '',
+              note: r['특이사항'] || r.note || ''
+            };
+
+            if (!isNaN(item.lat) && !isNaN(item.lng)) {
+              allItems.push(item);
+              renderMarkers();
+            } else if (addr && geocoder) {
               geocoder.addressSearch(addr, (res, st) => {
                 if (st === kakao.maps.services.Status.OK && res[0]) {
-                  allItems.push({
-                    id: 'apply_' + idx,
-                    category: 'APPLY',
-                    badge: '청약공고',
-                    name: name,
-                    addr: addr,
-                    lat: parseFloat(res[0].y),
-                    lng: parseFloat(res[0].x),
-                    scale: (p.TOT_SUPLY_HSHLDCO ? p.TOT_SUPLY_HSHLDCO + '세대' : '-'),
-                    price: '모집공고 기준',
-                    moveIn: p.MVN_PREARNGE_YM || '-',
-                    benefits: ['청약홈 공식공고', p.HOUSE_DTL_SECD_NM || '민영주택']
-                  });
+                  item.lat = parseFloat(res[0].y);
+                  item.lng = parseFloat(res[0].x);
+                  allItems.push(item);
                   renderMarkers();
                 }
               });
-            });
-          })
-          .catch(() => {});
-      }
-
-      function clearOverlays() {
-        overlays.forEach(o => o.setMap(null));
-        overlays = [];
-      }
-
-      function renderMarkers() {
-        if (!map) return;
-        clearOverlays();
-        const kw = document.getElementById('searchInput').value.trim().toLowerCase();
-
-        allItems.forEach(item => {
-          if (currentFilter !== 'ALL' && item.category !== currentFilter) return;
-          if (kw && !item.name.toLowerCase().includes(kw) && !item.addr.toLowerCase().includes(kw)) return;
-
-          const el = document.createElement('div');
-          el.className = 'gh-marker' + (item.category === 'APPLY' ? ' sub' : '');
-          el.innerHTML = `
-            <div class="gh-marker-badge">${item.badge}</div>
-            <div class="gh-marker-title">${item.name}</div>
-            <div class="gh-marker-sub">${item.scale}</div>
-          `;
-          el.onclick = () => openDetail(item);
-
-          const overlay = new kakao.maps.CustomOverlay({
-            position: new kakao.maps.LatLng(item.lat, item.lng),
-            content: el,
-            yAnchor: 1.15
+            }
           });
-          overlay.setMap(map);
-          overlays.push(overlay);
-        });
+        })
+        .catch(() => {});
+    }
+
+    // 상담 문의 이동
+    window.goTallyConsult = function () {
+      if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === 'function') {
+        window.gtag('event', 'conversion', { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
       }
-
-      // 상세창 열기 + 실시간 관심 인원 + 인근 편의시설 요약
-      function openDetail(item) {
-        selectedItem = item;
-        map.panTo(new kakao.maps.LatLng(item.lat, item.lng));
-
-        // 단지명 기반 일관성 있는 실시간 관심 인원 산출 (시간대 가중치 반영)
-        const hour = new Date().getHours();
-        const baseSeed = item.name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        const timeBoost = (hour >= 10 && hour <= 22) ? 7 : 2;
-        const viewers = (baseSeed % 19) + timeBoost;
-        document.getElementById('liveViewerText').textContent = `현재 ${viewers}명이 이 현장을 보고 있습니다`;
-
-        document.getElementById('dpTitle').textContent = item.name;
-        document.getElementById('dpAddr').textContent = item.addr;
-
-        const benWrap = document.getElementById('dpBenefits');
-        benWrap.innerHTML = item.benefits.map(b => `<span class="benefit-tag">✓ ${b}</span>`).join('');
-
-        document.getElementById('dpOverview').innerHTML = `
-          <div class="info-label">공급 구분</div><div class="info-val">${item.badge}</div>
-          <div class="info-label">공급 규모</div><div class="info-val">${item.scale}</div>
-          <div class="info-label">분양 조건</div><div class="info-val">${item.price}</div>
-          <div class="info-label">입주 예정</div><div class="info-val">${item.moveIn}</div>
-        `;
-
-        document.getElementById('calcPrice').value = '';
-        document.getElementById('calcResult').textContent = '분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.';
-
-        loadNearbyInfra(item.lat, item.lng);
-        document.getElementById('detailPanel').classList.add('open');
+      let targetUrl = CFG.TALLY_URL;
+      if (selectedItem && targetUrl && targetUrl.includes('tally.so')) {
+        const sep = targetUrl.includes('?') ? '&' : '?';
+        targetUrl += `${sep}site=${encodeURIComponent(selectedItem.name)}`;
       }
-
-      // 카카오 Places 카테고리 검색으로 인근 학교·병원·지하철역 거리 요약
-      function loadNearbyInfra(lat, lng) {
-        const infraWrap = document.getElementById('dpInfra');
-        infraWrap.innerHTML = '<div class="infra-item"><span class="infra-name">주변 학교·병원·역 거리 계산 중...</span></div>';
-
-        const loc = new kakao.maps.LatLng(lat, lng);
-        const targets = [
-          { code: 'SC4', label: '🏫 학교' },
-          { code: 'HP8', label: '🏥 병원' },
-          { code: 'SW8', label: '🚇 지하철' }
-        ];
-        const results = [];
-        let done = 0;
-
-        targets.forEach(t => {
-          ps.categorySearch(t.code, (data, status) => {
-            done++;
-            if (status === kakao.maps.services.Status.OK && data && data.length > 0) {
-              const nearest = data[0];
-              results.push({
-                label: t.label,
-                name: nearest.place_name,
-                dist: nearest.distance ? `${nearest.distance}m` : '인근'
-              });
-            }
-            if (done === targets.length) {
-              if (results.length === 0) {
-                infraWrap.innerHTML = '<div class="infra-item"><span class="infra-name">반경 내 등록된 주요 시설 정보가 없습니다.</span></div>';
-              } else {
-                infraWrap.innerHTML = results.map(r => `
-                  <div class="infra-item">
-                    <span class="infra-cat">${r.label}</span>
-                    <span class="infra-name" title="${r.name}">${r.name}</span>
-                    <span class="infra-dist">약 ${r.dist}</span>
-                  </div>
-                `).join('');
-              }
-            }
-          }, { location: loc, radius: 2000, sort: kakao.maps.services.SortBy.DISTANCE });
-        });
-      }
-
-      window.closeDetail = function () {
-        document.getElementById('detailPanel').classList.remove('open');
-      };
-
-      window.moveRegion = function (lat, lng, level) {
-        if (!map) return;
-        map.setLevel(level);
-        map.panTo(new kakao.maps.LatLng(lat, lng));
-      };
-
-      window.runFundCalc = function () {
-        const price = parseFloat(document.getElementById('calcPrice').value);
-        const rate = parseFloat(document.getElementById('calcDepositRate').value);
-        const out = document.getElementById('calcResult');
-        if (!price || price <= 0) {
-          out.textContent = '분양가(만원)를 입력하시면 1차 계약금, 중도금(60%), 입주 잔금이 자동 계산됩니다.';
-          return;
-        }
-        const deposit = Math.round(price * rate);
-        const mid = Math.round(price * 0.60);
-        const balance = Math.round(price - deposit - mid);
-        out.innerHTML = `
-          • <b>총 계약금(${Math.round(rate * 100)}%):</b> 약 ${deposit.toLocaleString()}만 원<br>
-          • <b>중도금(60%):</b> 약 ${mid.toLocaleString()}만 원<br>
-          • <b>입주 시 잔금(${Math.round((1 - rate - 0.6) * 100)}%):</b> 약 ${balance.toLocaleString()}만 원
-        `;
-      };
-
-      // Tally.so 접수폼(및 오픈카톡) 연결 + 구글 애즈 전환 이벤트 발신 자리
-      window.goTallyConsult = function () {
-        if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === 'function') {
-          window.gtag('event', 'conversion', { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
-        }
-        let targetUrl = CFG.TALLY_URL;
-        if (selectedItem && targetUrl.includes('tally.so')) {
-          const sep = targetUrl.includes('?') ? '&' : '?';
-          targetUrl += `${sep}site=${encodeURIComponent(selectedItem.name)}`;
-        }
+      if (targetUrl) {
         window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      };
+      }
+    };
 
-      // 필터 및 검색 이벤트
-      document.querySelectorAll('.chip-btn').forEach(btn => {
-        btn.onclick = () => {
-          document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentFilter = btn.dataset.filter;
-          renderMarkers();
-        };
-      });
-      document.getElementById('searchInput').addEventListener('input', renderMarkers);
+    // 필터 및 검색 이벤트
+    document.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderMarkers();
+      };
+    });
+
+    const searchInputEl = document.getElementById('searchInput');
+    if (searchInputEl) {
+      searchInputEl.addEventListener('input', renderMarkers);
+    }
  
   </script>
 </body>
