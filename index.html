@@ -311,12 +311,11 @@ function initMap() {
                     item.lng = parseFloat(res[0].x);
                     allItems.push(item);
                     renderMarkers();
-                  }
-                });
-              }
-            });
-          })
-          .catch(() => {});
+                  });
+      });
+    })
+    .catch(() => {});
+}
       // 청약홈 신규 공고 데이터 독립 호출
       function fetchApplyHomeData() {
         fetch(CFG.APPLY_API)
