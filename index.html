@@ -248,73 +248,95 @@
       let selectedItem = null;
 
       // 카카오맵 SDK 동적 로드 (Places 라이브러리 포함)
-const sdk = document.createElement('script');
-sdk.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CFG.KAKAO_KEY}&libraries=services&autoload=false`;
-sdk.onload = () => {
-  if (window.kakao && kakao.maps) {
-    kakao.maps.load(initMap);
-  } else {
-    document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 객체를 불러오지 못했습니다. 앱 키와 도메인 설정을 확인해 주세요.</div>';
-  }
-};
-sdk.onerror = () => {
-  document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 스크립트 접속이 차단되었습니다.</div>';
-};
-document.head.appendChild(sdk);
+    const sdk = document.createElement('script');
+    sdk.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CFG.KAKAO_KEY}&libraries=services&autoload=false`;
+    sdk.onload = () => {
+      if (window.kakao && kakao.maps) {
+        kakao.maps.load(initMap);
+      } else {
+        document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 객체를 불러오지 못했습니다. 앱 키와 도메인 설정을 확인해 주세요.</div>';
+      }
+    };
+    sdk.onerror = () => {
+      document.getElementById('map').innerHTML = '<div style="padding:24px;text-align:center;">카카오맵 스크립트 접속이 차단되었습니다.</div>';
+    };
+    document.head.appendChild(sdk);
 
-function initMap() {
-  const container = document.getElementById('map');
-  if (!container || !window.kakao || !kakao.maps) return;
-  map = new kakao.maps.Map(container, {
-    center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
-    level: 12
-  });
-  setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 600);
-  setInterval(() => { if (map) map.relayout(); }, 2500);
-  ps = new kakao.maps.services.Places();
-  geocoder = new kakao.maps.services.Geocoder();
-}
-          
-            const rows = Array.isArray(data) ? data : (data.data || []);
-            rows.forEach((r, idx) => {
-              const status = String(r['구분'] || r['상태'] || r.type || '').trim();
-              // 입주완료·일반매물·제휴 제외, 분양 현장만 수용
-              if (status.includes('입주') || status.includes('매매') || status.includes('제휴')) return;
-
-              const name = r['단지명'] || r['현장명'] || r.name || '';
-              const addr = r['주소'] || r['위치'] || r.address || '';
-              const lat = parseFloat(r['위도'] || r.lat);
-              const lng = parseFloat(r['경도'] || r.lng);
-              if (!name) return;
-
-              const item = {
-                id: 'sheet_' + idx,
-                category: 'DIRECT',
-                badge: status || '선착순·특혜',
-                name: name,
-                addr: addr,
-                lat: lat,
-                lng: lng,
-                scale: r['세대수'] || r['규모'] || '-',
-                price: r['분양가'] || r['가격'] || '상담 문의',
-                moveIn: r['입주시기'] || r['입주예정'] || '-',
-                benefits: (r['혜택'] || r['특장점'] || '계약조건 안심보장,선착순 동호지정').split(',').map(s => s.trim()).filter(Boolean)
-              };
-
-              if (!isNaN(lat) && !isNaN(lng)) {
-                allItems.push(item);
-                renderMarkers();
-              } else if (addr) {
-                geocoder.addressSearch(addr, (res, st) => {
-                  if (st === kakao.maps.services.Status.OK && res[0]) {
-                    item.lat = parseFloat(res[0].y);
-                    item.lng = parseFloat(res[0].x);
-                    allItems.push(item);
-                    renderMarkers();
-                  });
+    function initMap() {
+      const container = document.getElementById('map');
+      if (!container || !window.kakao || !kakao.maps) return;
+      map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
+        level: 12
       });
-    });
-}
+      setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 600);
+      setInterval(() => { if (map) map.relayout(); }, 2500);
+      ps = new kakao.maps.services.Places();
+      geocoder = new kakao.maps.services.Geocoder();
+
+      // 앱스 스크립트 & 청약홈 API 독립 호출
+      fetchSheetData();
+      if (typeof fetchApplyHomeData === 'function') {
+        fetchApplyHomeData();
+      }
+    }
+
+    // 구글 스프레드시트(앱스 스크립트) 데이터 호출
+    function fetchSheetData() {
+      if (!CFG.GAS_URL) return;
+      fetch(CFG.GAS_URL)
+        .then(res => res.json())
+        .then(data => {
+          const rows = Array.isArray(data) ? data : (data.data || []);
+          rows.forEach((r, idx) => {
+            const status = String(r['구분'] || r['상태'] || r.type || '').trim();
+            // 입주완료·일반매물·제휴 제외, 분양 현장만 수용
+            if (status.includes('입주') || status.includes('매매') || status.includes('제휴')) return;
+
+            const name = r['단지명'] || r['현장명'] || r.name || '';
+            const addr = r['주소'] || r['위치'] || r.address || '';
+            const lat = parseFloat(r['위도'] || r.lat);
+            const lng = parseFloat(r['경도'] || r.lng);
+            const region = r['지역'] || r.region || '';
+            const price = r['분양가'] || r.price || '';
+            const scale = r['세대수'] || r.scale || '';
+            const moveIn = r['입주시기'] || r.moveIn || '';
+            const note = r['특이사항'] || r['비고'] || r.note || '';
+
+            if (!name) return;
+
+            const item = {
+              id: `sheet_${idx}`,
+              source: 'sheet',
+              status: status || '선착순·미분양',
+              name,
+              addr,
+              lat,
+              lng,
+              region,
+              price,
+              scale,
+              moveIn,
+              note
+            };
+
+            if (!isNaN(lat) && !isNaN(lng)) {
+              allItems.push(item);
+              renderMarkers();
+            } else if (addr && geocoder) {
+              geocoder.addressSearch(addr, (res, st) => {
+                if (st === kakao.maps.services.Status.OK && res[0]) {
+                  item.lat = parseFloat(res[0].y);
+                  item.lng = parseFloat(res[0].x);
+                  allItems.push(item);
+                  renderMarkers();
+                }
+              });
+            }
+          });
+        })
+        .catch(() => {});
+    }
       // 청약홈 신규 공고 데이터 독립 호출
       function fetchApplyHomeData() {
         fetch(CFG.APPLY_API)
