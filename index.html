@@ -274,8 +274,7 @@ function initMap() {
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
 }
-          .then(res => res.json())
-          .then(data => {
+          
             const rows = Array.isArray(data) ? data : (data.data || []);
             rows.forEach((r, idx) => {
               const status = String(r['구분'] || r['상태'] || r.type || '').trim();
