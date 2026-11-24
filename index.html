@@ -259,6 +259,8 @@
           center: new kakao.maps.LatLng(36.35, 127.85), // 전국 뷰 중심
           level: 12
         });
+        setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 1200);
+        setInterval(() => { if (map) map.relayout(); }, 2500);
         setTimeout(() => { map.relayout(); map.setCenter(new kakao.maps.LatLng(36.35, 127.85)); }, 400);
         ps = new kakao.maps.services.Places();
         geocoder = new kakao.maps.services.Geocoder();
