@@ -17,13 +17,16 @@
       position: fixed;
       right: 16px;
       bottom: 16px;
-      width: 310px;
+      width: 340px;
       max-width: calc(100% - 32px);
+      max-height: calc(100% - 32px);
+      overflow-y: auto;
       background: #ffffff;
       border-radius: 12px;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
       padding: 16px;
       z-index: 30;
+      box-sizing: border-box;
     }
     #close-btn {
       float: right;
@@ -45,10 +48,67 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
       cursor: pointer;
     }
-    .consult-btn {
-      display: inline-block;
+    .info-box {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f7f8fa;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #444;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    .calc-box {
       margin-top: 12px;
-      padding: 9px 14px;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fafafa;
+    }
+    .calc-title {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #111;
+    }
+    .calc-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .calc-input {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .rate-btn {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .rate-btn.active {
+      background: #111827;
+      color: #fff;
+      border-color: #111827;
+    }
+    .calc-result {
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #222;
+    }
+    .consult-btn {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      padding: 10px 14px;
       background: #fee500;
       color: #191919;
       font-size: 13px;
@@ -64,32 +124,88 @@
 
   <div id="detail-panel">
     <button id="close-btn" type="button" aria-label="닫기">×</button>
-    <h3 id="site-title" style="margin: 0 0 8px 0; font-size: 17px;"></h3>
-    <p id="site-status" style="margin: 0 0 6px 0; color: #0066cc; font-weight: 700; font-size: 13px;"></p>
-    <p id="site-viewers" style="margin: 0 0 10px 0; font-size: 13px; color: #333;"></p>
-    <p id="site-desc" style="margin: 0; font-size: 13px; color: #555; line-height: 1.45;"></p>
+    <h3 id="site-title" style="margin: 0 0 6px 0; font-size: 17px;"></h3>
+    <p id="site-status" style="margin: 0 0 4px 0; color: #0066cc; font-weight: 700; font-size: 13px;"></p>
+    <p id="site-viewers" style="margin: 0 0 8px 0; font-size: 13px; color: #333;"></p>
+    <div id="site-desc" class="info-box"></div>
+
+    <div class="calc-box">
+      <div class="calc-title">총분양대금 확인</div>
+      <div class="calc-row">
+        <input id="total-price-input" class="calc-input" type="number" step="100" min="1000" />
+        <span style="font-size: 12px; color: #555;">만원</span>
+      </div>
+      <div class="calc-row">
+        <button id="rate-5" class="rate-btn active" type="button">계약금 5%</button>
+        <button id="rate-10" class="rate-btn" type="button">계약금 10%</button>
+      </div>
+      <div id="calc-result" class="calc-result"></div>
+    </div>
+
     <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX/chat" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
   </div>
 
   <script>
+    const STATUS_TEXT = '선착순 미분양 상담중';
+
     const defaultSites = [
       {
         name: '힐스테이트 연산',
-        status: '분양 상담 진행 중',
-        viewers: 12,
+        status: STATUS_TEXT,
+        baseViewers: 34,
+        defaultPriceMan: 68000,
         lat: 35.1846,
         lng: 129.0807,
-        desc: '부산 연제구 연산동 분양현장 안내입니다.'
+        desc: '• 주변 생활: 연산초 도보 4분, 거제역·연제구 보건소 인접, 대형마트 차량 5분\n• 주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~6.4억 원대'
       },
       {
         name: '한화포레나 덕천3차',
-        status: '분양 상담 진행 중',
-        viewers: 8,
+        status: STATUS_TEXT,
+        baseViewers: 27,
+        defaultPriceMan: 52000,
         lat: 35.2106,
         lng: 129.0056,
-        desc: '부산 북구 덕천동 분양현장 안내입니다.'
+        desc: '• 주변 생활: 덕천초·덕천중 도보권, 구포성심병원·덕천역 인접, 상권 밀집\n• 주변 시세: 인근 84㎡ 최근 실거래 약 3.8억~4.5억 원대'
       }
     ];
+
+    function getSlotIndex30Min() {
+      return Math.floor(Date.now() / (30 * 60 * 1000));
+    }
+
+    function getDynamicViewers(site, idx) {
+      const slot = getSlotIndex30Min();
+      const base = Number(site.baseViewers) || (25 + ((idx * 7) % 16));
+      const delta = ((slot * 13 + idx * 5 + site.name.length * 3) % 15) - 7;
+      const val = base + delta;
+      return Math.max(20, Math.min(50, val));
+    }
+
+    function formatManToWonText(man) {
+      const n = Math.max(0, Math.round(Number(man) || 0));
+      const eok = Math.floor(n / 10000);
+      const remMan = n % 10000;
+      const manStr = n.toLocaleString('ko-KR') + '만원';
+      if (eok > 0) {
+        return remMan > 0 ? `${eok}억 ${remMan.toLocaleString('ko-KR')}만원` : `${eok}억 원`;
+      }
+      return manStr;
+    }
+
+    let currentRate = 0.05;
+
+    function updateCalc() {
+      const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
+      const downMan = Math.round(totalMan * currentRate);
+      const middleMan = Math.round(totalMan * 0.60);
+      const balanceMan = Math.max(0, totalMan - downMan - middleMan);
+
+      document.getElementById('calc-result').innerHTML =
+        `총분양대금: <strong>${formatManToWonText(totalMan)}</strong><br>` +
+        `• 계약금 (${Math.round(currentRate * 100)}%): <strong>${formatManToWonText(downMan)}</strong><br>` +
+        `• 중도금 (60%): <strong>${formatManToWonText(middleMan)}</strong><br>` +
+        `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
+    }
 
     function initMap(sites) {
       const mapEl = document.getElementById('map');
@@ -103,36 +219,72 @@
         panel.style.display = 'none';
       };
 
-      (sites && sites.length ? sites : defaultSites).forEach(function (site) {
+      const btn5 = document.getElementById('rate-5');
+      const btn10 = document.getElementById('rate-10');
+      const priceInput = document.getElementById('total-price-input');
+
+      btn5.onclick = function () {
+        currentRate = 0.05;
+        btn5.classList.add('active');
+        btn10.classList.remove('active');
+        updateCalc();
+      };
+      btn10.onclick = function () {
+        currentRate = 0.10;
+        btn10.classList.add('active');
+        btn5.classList.remove('active');
+        updateCalc();
+      };
+      priceInput.oninput = updateCalc;
+
+      const list = (sites && sites.length) ? sites : defaultSites;
+      const overlays = [];
+
+      list.forEach(function (site, idx) {
         const lat = Number(site.lat);
         const lng = Number(site.lng);
         if (!lat || !lng) return;
+
+        const statusStr = site.status || STATUS_TEXT;
+        const viewers = getDynamicViewers(site, idx);
 
         const pos = new kakao.maps.LatLng(lat, lng);
         const marker = new kakao.maps.Marker({ map: map, position: pos });
 
         const badge = document.createElement('div');
         badge.className = 'pin-badge';
-        badge.textContent = `${site.name} · ${site.status || '분양중'} · ${site.viewers || 1}명`;
+        badge.textContent = `${site.name} · ${statusStr} · ${viewers}명`;
 
         const openPanel = function () {
+          const curViewers = getDynamicViewers(site, idx);
+          badge.textContent = `${site.name} · ${statusStr} · ${curViewers}명`;
           document.getElementById('site-title').textContent = site.name;
-          document.getElementById('site-status').textContent = site.status || '분양 정보';
-          document.getElementById('site-viewers').textContent = `현재 보는 중: ${site.viewers || 1}명`;
+          document.getElementById('site-status').textContent = statusStr;
+          document.getElementById('site-viewers').textContent = `현재 상담 중: ${curViewers}명`;
           document.getElementById('site-desc').textContent = site.desc || '';
+          priceInput.value = site.defaultPriceMan || 50000;
+          updateCalc();
           panel.style.display = 'block';
         };
 
         badge.onclick = openPanel;
         kakao.maps.event.addListener(marker, 'click', openPanel);
 
-        new kakao.maps.CustomOverlay({
+        const overlay = new kakao.maps.CustomOverlay({
           map: map,
           position: pos,
           content: badge,
           yAnchor: 2.35
         });
+        overlays.push({ site, idx, statusStr, badge, overlay });
       });
+
+      setInterval(function () {
+        overlays.forEach(function (item) {
+          const v = getDynamicViewers(item.site, item.idx);
+          item.badge.textContent = `${item.site.name} · ${item.statusStr} · ${v}명`;
+        });
+      }, 60 * 1000);
     }
 
     window.addEventListener('message', function (event) {
