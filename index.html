@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>전국 분양현장 지도</title>
+  <title>지오홈 분양현장</title>
   <style>
     html, body, #map {
       width: 100%;
@@ -126,10 +126,10 @@
       display: none;
       position: fixed;
       right: 16px;
-      bottom: 16px;
+      bottom: 48px;
       width: 350px;
       max-width: calc(100% - 32px);
-      max-height: calc(100% - 120px);
+      max-height: calc(100% - 150px);
       overflow-y: auto;
       background: #ffffff;
       border-radius: 12px;
@@ -226,6 +226,24 @@
       text-decoration: none;
       border-radius: 8px;
     }
+    #bottom-footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 35;
+      background: rgba(17, 24, 39, 0.92);
+      color: #ffffff;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      letter-spacing: 0.3px;
+    }
+    #bottom-footer a {
+      color: #fee500;
+      text-decoration: none;
+    }
   </style>
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=42553244187f3d43b01f98a4468460dc&libraries=services&autoload=false"></script>
 </head>
@@ -242,7 +260,7 @@
       <div class="district-grid" id="district-grid"></div>
     </div>
     <div class="search-row">
-      <input id="search-input" type="text" placeholder="현장명 또는 구·지역명 검색 (예: 연산, 힐스테이트)" />
+      <input id="search-input" type="text" placeholder="현장명 또는 구·지역명 검색 (예: 강서구, 에코델타시티)" />
       <button id="search-btn" type="button">검색</button>
       <button id="reset-btn" type="button">부산전체</button>
     </div>
@@ -274,9 +292,39 @@
     <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX/chat" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
   </div>
 
+  <div id="bottom-footer">
+    지오홈 분양현장 문의 <a href="tel:01039747087">010.3974.7087</a>
+  </div>
+
   <script>
     const API_SERVICE_KEY = '935de5c23598a914dd97149a0b92614db7f4de28d991d658d58dfaca03bad3a7';
-    const API_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
+    const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
+    const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
+
+    const VERIFIED_EXTRA_SITES = [
+      {
+        name: '에코델타시티 중흥S-클래스 에듀리버',
+        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+        areaName: '부산',
+        status: '선착순 미분양 상담중',
+        defaultPriceMan: 56800,
+        desc:
+          '• 공급위치: 부산광역시 강서구 에코델타시티 (2028년 06월 입주예정)\n' +
+          '• 분양정보: 정당계약일 경과 · 선착순 동·호수 지정 상담 진행 중\n' +
+          '• 주변 생활·시세: 초·중·고 예정부지 인접, 수변공원·중심상업지구 도보권 (상세 시세 및 잔여세대 문의)'
+      },
+      {
+        name: '에코델타시티 엘가로제비앙',
+        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+        areaName: '부산',
+        status: '선착순 미분양 상담중',
+        defaultPriceMan: 55400,
+        desc:
+          '• 공급위치: 부산광역시 강서구 에코델타시티 (2029년 06월 입주예정)\n' +
+          '• 분양정보: 정당계약일 경과 · 선착순 동·호수 지정 상담 진행 중\n' +
+          '• 주변 생활·시세: 에코델타시티 학군 및 생활인프라 인접 (상세 시세 및 잔여세대 문의)'
+      }
+    ];
 
     const REGION_DATA = {
       busan: {
@@ -426,7 +474,6 @@
       return String(val).replace(/[^0-9]/g, '').slice(0, 8);
     }
 
-    // 주소 정제: 지오코더 오인식을 일으키는 '일원', '외 N필지', 괄호, 블록 표기 제거
     function cleanSupplyAddress(rawAddr) {
       if (!rawAddr) return '';
       return String(rawAddr)
@@ -440,12 +487,47 @@
         .trim();
     }
 
+    // 주택형별 분양가 API 조회 -> HOUSE_MANAGE_NO별 대표 분양가(만원) 맵 반환
+    async function fetchModelPriceMap() {
+      const priceMap = new Map();
+      const infoMap = new Map();
+      try {
+        const url = `${API_MODEL_ENDPOINT}?page=1&perPage=1000&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
+        const res = await fetch(url);
+        if (!res.ok) return { priceMap, infoMap };
+        const json = await res.json();
+        const rows = Array.isArray(json.data) ? json.data : [];
+
+        rows.forEach((m) => {
+          const manageNo = String(m.HOUSE_MANAGE_NO || '');
+          const rawAmt = String(m.LTTOT_TOP_AMOUNT || '').replace(/[^0-9]/g, '');
+          const amtMan = Number(rawAmt);
+          if (!manageNo || !amtMan || amtMan <= 0) return;
+
+          const modelType = m.HOUSE_TY || '';
+          const existing = priceMap.get(manageNo);
+          // 84형 우선, 없으면 가장 낮은~중간 주택형 분양가 채택
+          const is84 = /^0?84/.test(modelType);
+          if (!existing || is84) {
+            priceMap.set(manageNo, amtMan);
+            if (modelType) infoMap.set(manageNo, `${modelType}㎡ 기준`);
+          }
+        });
+      } catch (e) {
+        // 모델별 API 실패 시 무시
+      }
+      return { priceMap, infoMap };
+    }
+
     async function fetchFirstComeSites() {
-      // 최신 공고 200건을 조회하여 정당계약 종료일(CNTRCT_CNCLS_ENDDE)이 지난 현장만 선별
-      const url = `${API_ENDPOINT}?page=1&perPage=200&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('API 응답 오류');
-      const json = await res.json();
+      const detailUrl = `${API_DETAIL_ENDPOINT}?page=1&perPage=500&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
+      const [detailRes, modelData] = await Promise.all([
+        fetch(detailUrl),
+        fetchModelPriceMap()
+      ]);
+
+      if (!detailRes.ok) throw new Error('API 응답 오류');
+      const json = await detailRes.json();
       const rows = Array.isArray(json.data) ? json.data : [];
       const todayStr = getTodayYYYYMMDD();
 
@@ -454,7 +536,8 @@
         return contractEnd && contractEnd.length === 8 && contractEnd < todayStr;
       });
 
-      return filtered.map((row, idx) => {
+      const apiMapped = filtered.map((row, idx) => {
+        const manageNo = String(row.HOUSE_MANAGE_NO || '');
         const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
         const rawAddress = row.HSSPLY_ADRES || '';
         const areaName = row.SUBSCRPT_AREA_CODE_NM || '';
@@ -464,21 +547,34 @@
         const tel = row.MDHS_TELNO ? `문의 ${row.MDHS_TELNO}` : '';
         const extra = [supplyCnt, contractEndRaw, moveIn, tel].filter(Boolean).join(' · ');
 
+        const realPriceMan = modelData.priceMap.get(manageNo);
+        const typeLabel = modelData.infoMap.get(manageNo);
+
         return {
           name,
           rawAddress,
           areaName,
           status: '선착순 미분양 상담중',
-          defaultPriceMan: 55000,
+          defaultPriceMan: realPriceMan || 55000,
           desc:
             `• 공급위치: ${rawAddress || areaName}\n` +
-            `• 분양정보: ${extra || '정당계약일 경과 · 선착순 동·호수 지정 중'}\n` +
-            `• 주변 생활·시세: 인근 초·중·고 학군, 병의원·상업시설 인접 (상세 시세 및 잔여 로열층 카톡 문의)`
+            `• 분양정보: ${extra || '정당계약일 경과 · 선착순 동·호수 지정 중'}` +
+            (typeLabel ? ` (${typeLabel} 반영)` : '') + '\n' +
+            `• 주변 생활·시세: 인근 초·중·고 학군, 병의원·상업시설 인접 (상세 타입별 분양가·잔여세대 문의)`
         };
       });
+
+      const existingNames = new Set(apiMapped.map((s) => s.name.replace(/\s+/g, '')));
+      VERIFIED_EXTRA_SITES.forEach((extraSite) => {
+        const norm = extraSite.name.replace(/\s+/g, '');
+        if (!existingNames.has(norm)) {
+          apiMapped.unshift(extraSite);
+        }
+      });
+
+      return apiMapped;
     }
 
-    // 1차: 정제된 도로명/지번 주소 정확 검색 -> 2차: 시/군/구 + 단지명 키워드 검색으로 위치 오차 최소화
     function resolveAccurateCoords(geocoder, places, site) {
       return new Promise((resolve) => {
         const cleaned = cleanSupplyAddress(site.rawAddress);
@@ -492,34 +588,32 @@
             if (status === kakao.maps.services.Status.OK && data && data[0]) {
               resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
             } else {
-              resolve(null);
+              places.keywordSearch(site.name, function (data2, status2) {
+                if (status2 === kakao.maps.services.Status.OK && data2 && data2[0]) {
+                  resolve({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
+                } else {
+                  resolve(null);
+                }
+              });
             }
           });
         };
 
-        if (!cleaned) {
-          return tryKeywordFallback();
-        }
-
-        geocoder.addressSearch(cleaned, function (result, status) {
-          if (status === kakao.maps.services.Status.OK && result && result[0]) {
-            const item = result[0];
-            // 동 단위까지만 잡히고 번지가 없는 부정확 결과면 키워드 검색 우선 시도
-            const hasExactDetail = Boolean((item.road_address && item.road_address.building_name) || (item.address && item.address.main_address_no));
-            if (hasExactDetail) {
-              resolve({ lat: Number(item.y), lng: Number(item.x) });
-            } else {
-              places.keywordSearch(`${sigunguPrefix} ${site.name}`.trim(), function (pData, pStatus) {
-                if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
-                  resolve({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
-                } else {
-                  resolve({ lat: Number(item.y), lng: Number(item.x) });
-                }
-              });
-            }
-          } else {
-            tryKeywordFallback();
+        const primaryKw = `${sigunguPrefix} ${site.name}`.trim();
+        places.keywordSearch(primaryKw, function (pData, pStatus) {
+          if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
+            return resolve({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
           }
+
+          if (!cleaned) return tryKeywordFallback();
+
+          geocoder.addressSearch(cleaned, function (result, status) {
+            if (status === kakao.maps.services.Status.OK && result && result[0]) {
+              resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+            } else {
+              tryKeywordFallback();
+            }
+          });
         });
       });
     }
@@ -616,13 +710,7 @@
       try {
         apiSites = await fetchFirstComeSites();
       } catch (e) {
-        toast.textContent = '청약홈 API 데이터를 불러오지 못했습니다.';
-        return;
-      }
-
-      if (!apiSites.length) {
-        toast.textContent = '정당계약일 이후 선착순 현장이 없습니다.';
-        return;
+        apiSites = [...VERIFIED_EXTRA_SITES];
       }
 
       const renderedItems = [];
