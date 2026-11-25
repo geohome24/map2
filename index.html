@@ -401,6 +401,7 @@
     const API_SERVICE_KEY = '935de5c23598a914dd97149a0b92614db7f4de28d991d658d58dfaca03bad3a7';
     const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
+    const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
 
     const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
     const STATUS_NORMAL_COLOR = '#0066cc';
@@ -421,6 +422,27 @@
       ['에코델타', '에코델타시티', '강서구'],
       ['리버시티', '에듀리버']
     ];
+
+    let activeSiteForConsult = null;
+
+    function sendLeadToSheet(payload) {
+      if (!LEAD_WEBHOOK_URL) return;
+      try {
+        if (navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify(payload)], { type: 'text/plain;charset=utf-8' });
+          navigator.sendBeacon(LEAD_WEBHOOK_URL, blob);
+          return;
+        }
+      } catch (e) {}
+
+      fetch(LEAD_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).catch(function () {});
+    }
 
     function normalizeSearchKey(str) {
       return String(str || '')
@@ -743,6 +765,22 @@
 
     let currentRate = 0.05;
 
+    function getCalcSummaryText() {
+      const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
+      const downMan = Math.round(totalMan * currentRate);
+      const middleMan = Math.round(totalMan * 0.60);
+      const balanceMan = Math.max(0, totalMan - downMan - middleMan);
+      const ratePct = Math.round(currentRate * 100);
+      const remPct = Math.max(0, 40 - ratePct);
+
+      return (
+        `총분양대금 ${formatManToWonText(totalMan)} / ` +
+        `계약금(${ratePct}%) ${formatManToWonText(downMan)} / ` +
+        `중도금(60%) ${formatManToWonText(middleMan)} / ` +
+        `잔금(${remPct}%) ${formatManToWonText(balanceMan)}`
+      );
+    }
+
     function updateCalc() {
       const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
       const downMan = Math.round(totalMan * currentRate);
@@ -854,7 +892,6 @@
       const todayStr = getTodayYYYYMMDD();
       const twoYearsAgoStr = getTwoYearsAgoYYYYMMDD();
 
-      // 정당계약종료일이 지났으며, 2년이 지난 경우 500세대 초과만 유지(500세대 이하는 제외)
       const filtered = allRows.filter((row) => {
         const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
         if (!contractEnd || contractEnd.length !== 8 || contractEnd >= todayStr) {
@@ -1056,6 +1093,7 @@
       const btn5 = document.getElementById('rate-5');
       const btn10 = document.getElementById('rate-10');
       const priceInput = document.getElementById('total-price-input');
+      const kakaoBtn = document.getElementById('kakao-link');
 
       btn5.onclick = function () {
         currentRate = 0.05;
@@ -1070,6 +1108,21 @@
         updateCalc();
       };
       priceInput.oninput = updateCalc;
+
+      kakaoBtn.onclick = function () {
+        const site = activeSiteForConsult || {};
+        const summary = getCalcSummaryText();
+        sendLeadToSheet({
+          channel: '지도_카톡상담',
+          siteName: site.name || '미지정',
+          region: site.areaName || REGION_DATA[activeRegionKey]?.label || '부산',
+          customerName: '카톡문의고객',
+          phone: '-',
+          visitDate: '-',
+          agree: '동의합니다.',
+          conditions: `${summary} / 위치: ${site.rawAddress || site.areaName || '-'}`
+        });
+      };
 
       function hideDropdown() {
         dropdown.style.display = 'none';
@@ -1217,6 +1270,7 @@
         badge.textContent = `${site.name} · ${viewers}명 보는중`;
 
         const openPanel = function () {
+          activeSiteForConsult = site;
           const curViewers = getDynamicViewers(site, idx);
           badge.textContent = `${site.name} · ${curViewers}명 보는중`;
           document.getElementById('site-title').textContent = site.name;
