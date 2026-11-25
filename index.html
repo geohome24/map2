@@ -402,9 +402,11 @@
     const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
 
-    const STATUS_TEXT = '상담진행중(분양마감 확인 필요)';
+    const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
+    const STATUS_NORMAL_COLOR = '#0066cc';
+    const STATUS_OLD_LARGE_TEXT = '분양마감 확인 필요';
+    const STATUS_OLD_LARGE_COLOR = '#dc2626';
 
-    // 브랜드·줄임말 함축어 확장 매핑 (검색 시 동의어도 함께 매칭)
     const ALIAS_GROUPS = [
       ['중흥', '중흥s클래스', 's클래스', '에스클래스'],
       ['푸르지오', '대우'],
@@ -565,7 +567,6 @@
       ];
     }
 
-    // 누락 방지를 위한 주요 선착순 현장 보강 목록
     const VERIFIED_EXTRA_SITES = [
       {
         name: '에코델타시티 중흥S-클래스 리버시티',
@@ -574,7 +575,8 @@
         areaName: '부산',
         fallbackLat: 35.1688,
         fallbackLng: 128.9385,
-        status: STATUS_TEXT,
+        status: STATUS_NORMAL_TEXT,
+        statusColor: STATUS_NORMAL_COLOR,
         defaultPriceMan: 56200,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -590,7 +592,8 @@
         areaName: '부산',
         fallbackLat: 35.1725,
         fallbackLng: 128.9420,
-        status: STATUS_TEXT,
+        status: STATUS_NORMAL_TEXT,
+        statusColor: STATUS_NORMAL_COLOR,
         defaultPriceMan: 56800,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -606,7 +609,8 @@
         areaName: '부산',
         fallbackLat: 35.1652,
         fallbackLng: 128.9445,
-        status: STATUS_TEXT,
+        status: STATUS_NORMAL_TEXT,
+        statusColor: STATUS_NORMAL_COLOR,
         defaultPriceMan: 55400,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -752,12 +756,21 @@
         `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
     }
 
-    function getTodayYYYYMMDD() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
+    function formatDateObjYYYYMMDD(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
       return `${y}${m}${d}`;
+    }
+
+    function getTodayYYYYMMDD() {
+      return formatDateObjYYYYMMDD(new Date());
+    }
+
+    function getTwoYearsAgoYYYYMMDD() {
+      const dt = new Date();
+      dt.setFullYear(dt.getFullYear() - 2);
+      return formatDateObjYYYYMMDD(dt);
     }
 
     function normalizeDateDigits(val) {
@@ -839,10 +852,20 @@
       });
 
       const todayStr = getTodayYYYYMMDD();
+      const twoYearsAgoStr = getTwoYearsAgoYYYYMMDD();
 
+      // 정당계약종료일이 지났으며, 2년이 지난 경우 500세대 초과만 유지(500세대 이하는 제외)
       const filtered = allRows.filter((row) => {
         const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
-        return contractEnd && contractEnd.length === 8 && contractEnd < todayStr;
+        if (!contractEnd || contractEnd.length !== 8 || contractEnd >= todayStr) {
+          return false;
+        }
+        const isOlderThanTwoYears = contractEnd < twoYearsAgoStr;
+        if (isOlderThanTwoYears) {
+          const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
+          return totalUnits > 500;
+        }
+        return true;
       });
 
       const apiMapped = filtered.map((row, idx) => {
@@ -850,7 +873,10 @@
         const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
         const rawAddress = row.HSSPLY_ADRES || '';
         const areaName = row.SUBSCRPT_AREA_CODE_NM || '';
-        const supplyCnt = row.TOT_SUPLY_HSHLDCO ? `총 ${row.TOT_SUPLY_HSHLDCO}세대` : '';
+        const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
+        const supplyCnt = totalUnits > 0 ? `총 ${totalUnits}세대` : '';
+        const contractEndDigits = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
+        const isOlderThanTwoYears = contractEndDigits && contractEndDigits < twoYearsAgoStr;
         const contractEndHyphen = formatHyphenDate(row.CNTRCT_CNCLS_ENDDE);
         const moveInHyphen = formatHyphenDate(row.MVN_PREARNGE_YM);
 
@@ -875,7 +901,8 @@
           aliases: '',
           rawAddress,
           areaName,
-          status: STATUS_TEXT,
+          status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
+          statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
           defaultPriceMan: realPriceMan || 55000,
           infoLines: lines
         };
@@ -1193,7 +1220,9 @@
           const curViewers = getDynamicViewers(site, idx);
           badge.textContent = `${site.name} · ${curViewers}명 보는중`;
           document.getElementById('site-title').textContent = site.name;
-          document.getElementById('site-status').textContent = site.status;
+          const statusEl = document.getElementById('site-status');
+          statusEl.textContent = site.status;
+          statusEl.style.color = site.statusColor || STATUS_NORMAL_COLOR;
           document.getElementById('site-viewers').textContent = `현재 ${curViewers}명 보는중`;
           renderInfoLines(site.infoLines);
           priceInput.value = site.defaultPriceMan;
