@@ -1,477 +1,149 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>분양 현장 지도 · 상담 안내</title>
+  <title>전국 분양현장 지도</title>
   <style>
-    * {
-      box-sizing: border-box;
+    html, body, #map {
+      width: 100%;
+      height: 100%;
       margin: 0;
       padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
     }
-    html, body {
-      width: 100%;
-      height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-      background: #f5f6f8;
-      color: #1f2937;
-    }
-    .app-wrap {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      height: 100%;
-      min-height: 620px;
-      position: relative;
-    }
-    .top-bar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 14px;
-      background: #ffffff;
-      border-bottom: 1px solid #e5e7eb;
-      z-index: 20;
-    }
-    .filter-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .chip-btn {
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid #d1d5db;
-      background: #ffffff;
-      color: #374151;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .chip-btn.active {
-      background: #1d4ed8;
-      border-color: #1d4ed8;
-      color: #ffffff;
-    }
-    .search-box {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1 1 220px;
-      max-width: 340px;
-    }
-    #searchInput {
-      width: 100%;
-      padding: 7px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 13px;
-      outline: none;
-    }
-    #searchInput:focus {
-      border-color: #1d4ed8;
-    }
-    .contact-badge {
-      font-size: 12px;
-      font-weight: 700;
-      color: #1e3a8a;
-      background: #eff6ff;
-      padding: 6px 10px;
-      border-radius: 8px;
-      white-space: nowrap;
-    }
-    .map-stage {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      min-height: 460px;
-    }
-    #map {
-      width: 100%;
-      height: 100%;
-      min-height: 460px;
-      background: #e5e7eb;
-    }
-    .info-panel {
+    #detail-panel {
+      display: none;
       position: fixed;
-      right: 14px;
-      bottom: 14px;
-      width: 340px;
-      max-width: calc(100vw - 28px);
+      right: 16px;
+      bottom: 16px;
+      width: 310px;
+      max-width: calc(100% - 32px);
       background: #ffffff;
-      border: 1px solid #e5e7eb;
       border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
       padding: 16px;
       z-index: 30;
-      display: none;
     }
-    .info-panel.show {
-      display: block;
-    }
-    .info-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .info-status {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: #dbeafe;
-      color: #1d4ed8;
-      margin-bottom: 6px;
-    }
-    .info-title {
-      font-size: 17px;
-      font-weight: 700;
-      color: #111827;
-      line-height: 1.35;
-    }
-    .close-btn {
+    #close-btn {
+      float: right;
       border: none;
-      background: #f3f4f6;
-      color: #4b5563;
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
+      background: transparent;
+      font-size: 20px;
+      line-height: 1;
       cursor: pointer;
-      font-size: 15px;
-      font-weight: 700;
     }
-    .info-meta {
-      font-size: 13px;
-      color: #4b5563;
-      line-height: 1.6;
-      margin: 10px 0 14px;
+    .pin-badge {
+      background: #ffffff;
+      border: 2px solid #111111;
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #111111;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
     }
     .consult-btn {
-      width: 100%;
-      padding: 11px 14px;
-      border: none;
-      border-radius: 8px;
-      background: #1d4ed8;
-      color: #ffffff;
-      font-size: 14px;
+      display: inline-block;
+      margin-top: 12px;
+      padding: 9px 14px;
+      background: #fee500;
+      color: #191919;
+      font-size: 13px;
       font-weight: 700;
-      cursor: pointer;
-    }
-    .consult-btn:hover {
-      background: #1e40af;
+      text-decoration: none;
+      border-radius: 8px;
     }
   </style>
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=42553244187f3d43b01f98a4468460dc&autoload=false"></script>
 </head>
 <body>
-  <div class="app-wrap">
-    <div class="top-bar">
-      <div class="filter-group">
-        <button type="button" class="chip-btn active" data-filter="all">전체</button>
-        <button type="button" class="chip-btn" data-filter="선착순·미분양">선착순·미분양</button>
-        <button type="button" class="chip-btn" data-filter="청약일정">청약일정</button>
-      </div>
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="단지명, 지역, 주소 검색" />
-      </div>
-      <div class="contact-badge">상담문의 010.3974.7087</div>
-    </div>
+  <div id="map"></div>
 
-    <div class="map-stage">
-      <div id="map"></div>
-    </div>
-
-    <aside id="infoPanel" class="info-panel" aria-live="polite">
-      <div class="info-header">
-        <div>
-          <span id="panelStatus" class="info-status">선착순·미분양</span>
-          <h2 id="panelTitle" class="info-title">현장명</h2>
-        </div>
-        <button type="button" id="closePanelBtn" class="close-btn" aria-label="닫기">×</button>
-      </div>
-      <div id="panelMeta" class="info-meta"></div>
-      <button type="button" id="panelConsultBtn" class="consult-btn" onclick="goTallyConsult()">상담 문의하기</button>
-    </aside>
+  <div id="detail-panel">
+    <button id="close-btn" type="button" aria-label="닫기">×</button>
+    <h3 id="site-title" style="margin: 0 0 8px 0; font-size: 17px;"></h3>
+    <p id="site-status" style="margin: 0 0 6px 0; color: #0066cc; font-weight: 700; font-size: 13px;"></p>
+    <p id="site-viewers" style="margin: 0 0 10px 0; font-size: 13px; color: #333;"></p>
+    <p id="site-desc" style="margin: 0; font-size: 13px; color: #555; line-height: 1.45;"></p>
+    <a id="kakao-link" class="consult-btn" href="https://pf.kakao.com" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
   </div>
 
   <script>
-    (function () {
-      const CFG = {
-        KAKAO_KEY: "42553244187f3d43b01f98a4468460dc",
-        GAS_URL: "",
-        APPLY_API: "",
-        TALLY_URL: "",
-        GOOGLE_ADS_CONVERSION_ID: ""
-      };
-
-      let map = null;
-      let ps = null;
-      let geocoder = null;
-      let allItems = [];
-      let markers = [];
-      let currentFilter = "all";
-      let selectedItem = null;
-
-      function showMapMessage(msg) {
-        const mapEl = document.getElementById("map");
-        if (!mapEl) return;
-        mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#374151;font-size:14px;line-height:1.6;">' + msg + "</div>";
+    const defaultSites = [
+      {
+        name: '힐스테이트 연산',
+        status: '분양 상담 진행 중',
+        viewers: 12,
+        lat: 35.1846,
+        lng: 129.0807,
+        desc: '부산 연제구 연산동 분양현장 안내입니다.'
+      },
+      {
+        name: '한화포레나 덕천3차',
+        status: '분양 상담 진행 중',
+        viewers: 8,
+        lat: 35.2106,
+        lng: 129.0056,
+        desc: '부산 북구 덕천동 분양현장 안내입니다.'
       }
+    ];
 
-      function initMap() {
-        const container = document.getElementById("map");
-        if (!container || !window.kakao || !window.kakao.maps) {
-          showMapMessage("카카오맵 객체를 불러오지 못했습니다. JavaScript 키와 허용 도메인(https://geohome24.github.io)을 확인해 주세요.");
-          return;
-        }
-
-        const centerLatLng = new kakao.maps.LatLng(36.35, 127.85);
-        map = new kakao.maps.Map(container, {
-          center: centerLatLng,
-          level: 12
-        });
-
-        if (kakao.maps.services) {
-          ps = new kakao.maps.services.Places();
-          geocoder = new kakao.maps.services.Geocoder();
-        }
-
-        const refreshLayout = function () {
-          if (!map) return;
-          map.relayout();
-        };
-
-        setTimeout(refreshLayout, 300);
-        setTimeout(refreshLayout, 900);
-        setInterval(refreshLayout, 2500);
-
-        fetchSheetData();
-        fetchApplyHomeData();
-      }
-
-      function clearMarkers() {
-        markers.forEach(function (m) {
-          m.setMap(null);
-        });
-        markers = [];
-      }
-
-      function openDetailPanel(item) {
-        selectedItem = item;
-        const panel = document.getElementById("infoPanel");
-        const statusEl = document.getElementById("panelStatus");
-        const titleEl = document.getElementById("panelTitle");
-        const metaEl = document.getElementById("panelMeta");
-
-        if (!panel || !statusEl || !titleEl || !metaEl) return;
-
-        statusEl.textContent = item.status || "선착순·미분양";
-        titleEl.textContent = item.name || "현장 정보";
-
-        const lines = [];
-        if (item.region) lines.push("지역: " + item.region);
-        if (item.addr) lines.push("위치: " + item.addr);
-        if (item.price) lines.push("분양가: " + item.price);
-        if (item.scale) lines.push("세대수: " + item.scale);
-        if (item.moveIn) lines.push("입주시기: " + item.moveIn);
-        if (item.note) lines.push("안내: " + item.note);
-        lines.push("직통문의: 010.3974.7087");
-
-        metaEl.innerHTML = lines.join("<br />");
-        panel.classList.add("show");
-      }
-
-      function renderMarkers() {
-        if (!map || !window.kakao || !window.kakao.maps) return;
-        clearMarkers();
-
-        const searchEl = document.getElementById("searchInput");
-        const keyword = searchEl ? searchEl.value.trim().toLowerCase() : "";
-
-        const filtered = allItems.filter(function (item) {
-          const matchFilter = currentFilter === "all" || (item.status && item.status.includes(currentFilter));
-          if (!matchFilter) return false;
-          if (!keyword) return true;
-          const hay = [item.name, item.addr, item.region, item.status].join(" ").toLowerCase();
-          return hay.includes(keyword);
-        });
-
-        filtered.forEach(function (item) {
-          const lat = parseFloat(item.lat);
-          const lng = parseFloat(item.lng);
-          if (isNaN(lat) || isNaN(lng)) return;
-
-          const position = new kakao.maps.LatLng(lat, lng);
-          const marker = new kakao.maps.Marker({
-            map: map,
-            position: position,
-            title: item.name
-          });
-
-          kakao.maps.event.addListener(marker, "click", function () {
-            openDetailPanel(item);
-          });
-
-          markers.push(marker);
-        });
-      }
-
-      function pushItemWithGeocode(item) {
-        const lat = parseFloat(item.lat);
-        const lng = parseFloat(item.lng);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          item.lat = lat;
-          item.lng = lng;
-          allItems.push(item);
-          renderMarkers();
-          return;
-        }
-
-        if (item.addr && geocoder && kakao.maps && kakao.maps.services) {
-          geocoder.addressSearch(item.addr, function (result, status) {
-            if (status === kakao.maps.services.Status.OK && result && result[0]) {
-              item.lat = parseFloat(result[0].y);
-              item.lng = parseFloat(result[0].x);
-              allItems.push(item);
-              renderMarkers();
-            }
-          });
-        }
-      }
-
-      function fetchSheetData() {
-        if (!CFG.GAS_URL) return;
-        fetch(CFG.GAS_URL)
-          .then(function (res) {
-            return res.json();
-          })
-          .then(function (data) {
-            const rows = Array.isArray(data) ? data : (data.data || []);
-            rows.forEach(function (r, idx) {
-              const status = String(r["구분"] || r["상태"] || r.type || "").trim();
-              if (status.includes("입주") || status.includes("매매") || status.includes("제휴")) return;
-
-              const name = r["단지명"] || r["현장명"] || r.name || "";
-              if (!name) return;
-
-              pushItemWithGeocode({
-                id: "sheet_" + idx,
-                source: "sheet",
-                status: status || "선착순·미분양",
-                name: name,
-                addr: r["주소"] || r["위치"] || r.address || "",
-                lat: r["위도"] || r.lat,
-                lng: r["경도"] || r.lng,
-                region: r["지역"] || r.region || "",
-                price: r["분양가"] || r.price || "",
-                scale: r["세대수"] || r.scale || "",
-                moveIn: r["입주시기"] || r.moveIn || "",
-                note: r["특이사항"] || r["비고"] || r.note || ""
-              });
-            });
-          })
-          .catch(function () {});
-      }
-
-      function fetchApplyHomeData() {
-        if (!CFG.APPLY_API) return;
-        fetch(CFG.APPLY_API)
-          .then(function (res) {
-            return res.json();
-          })
-          .then(function (json) {
-            const list = Array.isArray(json) ? json : (json.data || []);
-            list.forEach(function (r, idx) {
-              const name = r["단지명"] || r["주택명"] || r.HOUSE_NM || r.name || "";
-              if (!name) return;
-
-              pushItemWithGeocode({
-                id: "apply_" + idx,
-                source: "apply",
-                status: "청약일정",
-                name: name,
-                addr: r["주소"] || r["공급위치"] || r.HSSPLY_ADRES || r.address || "",
-                lat: r["위도"] || r.lat,
-                lng: r["경도"] || r.lng,
-                region: r["지역"] || r["공급지역명"] || r.SUBSCRPT_AREA_CODE_NM || "",
-                price: r["분양가"] || r.price || "",
-                scale: r["세대수"] || r["총공급세대수"] || r.TOT_SUPLY_HSHLDCO || "",
-                moveIn: r["입주시기"] || r["입주예정월"] || r.MVN_PREARNGE_YM || "",
-                note: r["특이사항"] || r.note || ""
-              });
-            });
-          })
-          .catch(function () {});
-      }
-
-      window.goTallyConsult = function () {
-        if (CFG.GOOGLE_ADS_CONVERSION_ID && typeof window.gtag === "function") {
-          window.gtag("event", "conversion", { send_to: CFG.GOOGLE_ADS_CONVERSION_ID });
-        }
-        let targetUrl = CFG.TALLY_URL;
-        if (!targetUrl) {
-          alert("상담문의 010.3974.7087 으로 연락 주시거나 Tally 접수 폼 URL을 연결해 주세요.");
-          return;
-        }
-        if (selectedItem && selectedItem.name && targetUrl.includes("tally.so")) {
-          const sep = targetUrl.includes("?") ? "&" : "?";
-          targetUrl += sep + "site=" + encodeURIComponent(selectedItem.name);
-        }
-        window.open(targetUrl, "_blank", "noopener,noreferrer");
-      };
-
-      document.querySelectorAll(".chip-btn").forEach(function (btn) {
-        btn.onclick = function () {
-          document.querySelectorAll(".chip-btn").forEach(function (b) {
-            b.classList.remove("active");
-          });
-          btn.classList.add("active");
-          currentFilter = btn.dataset.filter || "all";
-          renderMarkers();
-        };
+    function initMap(sites) {
+      const mapEl = document.getElementById('map');
+      const map = new kakao.maps.Map(mapEl, {
+        center: new kakao.maps.LatLng(36.3504, 127.3845),
+        level: 12
       });
 
-      const searchInputEl = document.getElementById("searchInput");
-      if (searchInputEl) {
-        searchInputEl.addEventListener("input", renderMarkers);
-      }
+      const panel = document.getElementById('detail-panel');
+      document.getElementById('close-btn').onclick = function () {
+        panel.style.display = 'none';
+      };
 
-      const closePanelBtn = document.getElementById("closePanelBtn");
-      if (closePanelBtn) {
-        closePanelBtn.addEventListener("click", function () {
-          const panel = document.getElementById("infoPanel");
-          if (panel) panel.classList.remove("show");
+      (sites && sites.length ? sites : defaultSites).forEach(function (site) {
+        const lat = Number(site.lat);
+        const lng = Number(site.lng);
+        if (!lat || !lng) return;
+
+        const pos = new kakao.maps.LatLng(lat, lng);
+        const marker = new kakao.maps.Marker({ map: map, position: pos });
+
+        const badge = document.createElement('div');
+        badge.className = 'pin-badge';
+        badge.textContent = `${site.name} · ${site.status || '분양중'} · ${site.viewers || 1}명`;
+
+        const openPanel = function () {
+          document.getElementById('site-title').textContent = site.name;
+          document.getElementById('site-status').textContent = site.status || '분양 정보';
+          document.getElementById('site-viewers').textContent = `현재 보는 중: ${site.viewers || 1}명`;
+          document.getElementById('site-desc').textContent = site.desc || '';
+          panel.style.display = 'block';
+        };
+
+        badge.onclick = openPanel;
+        kakao.maps.event.addListener(marker, 'click', openPanel);
+
+        new kakao.maps.CustomOverlay({
+          map: map,
+          position: pos,
+          content: badge,
+          yAnchor: 2.35
         });
-      }
+      });
+    }
 
-      function loadKakaoSdk() {
-        if (!CFG.KAKAO_KEY) {
-          showMapMessage("CFG.KAKAO_KEY에 카카오맵 JavaScript 키를 입력한 뒤 저장해 주세요.");
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=" + encodeURIComponent(CFG.KAKAO_KEY) + "&libraries=services&autoload=false";
-        script.onload = function () {
-          if (window.kakao && window.kakao.maps) {
-            window.kakao.maps.load(initMap);
-          } else {
-            showMapMessage("카카오맵 SDK 초기화에 실패했습니다. 카카오 개발자 콘솔에서 플랫폼 도메인을 확인해 주세요.");
-          }
-        };
-        script.onerror = function () {
-          showMapMessage("카카오맵 스크립트를 불러오지 못했습니다. 네트워크나 도메인 등록 상태를 확인해 주세요.");
-        };
-        document.head.appendChild(script);
+    window.addEventListener('message', function (event) {
+      if (event.data && event.data.type === 'SITE_DATA' && Array.isArray(event.data.sites)) {
+        initMap(event.data.sites);
       }
+    });
 
-      loadKakaoSdk();
-    })();
+    kakao.maps.load(function () {
+      initMap(defaultSites);
+    });
   </script>
 </body>
 </html>
