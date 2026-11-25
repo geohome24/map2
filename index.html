@@ -402,6 +402,7 @@
     const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
     const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
+    const COORD_CACHE_KEY = 'geohome_coord_cache_v1';
 
     const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
     const STATUS_NORMAL_COLOR = '#0066cc';
@@ -424,6 +425,22 @@
     ];
 
     let activeSiteForConsult = null;
+    let coordCache = loadCoordCache();
+
+    function loadCoordCache() {
+      try {
+        const raw = localStorage.getItem(COORD_CACHE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveCoordCache() {
+      try {
+        localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(coordCache));
+      } catch (e) {}
+    }
 
     function sendLeadToSheet(payload) {
       if (!LEAD_WEBHOOK_URL) return;
@@ -833,7 +850,7 @@
       const priceMap = new Map();
       const infoMap = new Map();
       try {
-        const pages = [1, 2, 3, 4];
+        const pages = [1, 2, 3];
         const responses = await Promise.all(
           pages.map((p) =>
             fetch(`${API_MODEL_ENDPOINT}?page=${p}&perPage=1000&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`)
@@ -864,7 +881,7 @@
     }
 
     async function fetchFirstComeSites() {
-      const detailPages = [1, 2, 3, 4];
+      const detailPages = [1, 2, 3];
       const [detailJsons, modelData] = await Promise.all([
         Promise.all(
           detailPages.map((p) =>
@@ -953,6 +970,13 @@
         }
       });
 
+      // 부산/경남 권역 우선 정렬로 체감 로딩 속도 향상
+      apiMapped.sort((a, b) => {
+        const aBusan = (`${a.areaName} ${a.rawAddress}`).includes('부산') ? 0 : 1;
+        const bBusan = (`${b.areaName} ${b.rawAddress}`).includes('부산') ? 0 : 1;
+        return aBusan - bBusan;
+      });
+
       return apiMapped;
     }
 
@@ -962,19 +986,31 @@
           return resolve({ lat: site.fallbackLat, lng: site.fallbackLng });
         }
 
+        const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
+        if (cacheKey && coordCache[cacheKey]) {
+          return resolve(coordCache[cacheKey]);
+        }
+
+        const finishWith = (coords) => {
+          if (coords && cacheKey) {
+            coordCache[cacheKey] = coords;
+          }
+          resolve(coords);
+        };
+
         const cleaned = cleanSupplyAddress(site.rawAddress);
         const tokens = cleaned.split(' ').filter(Boolean);
         const sigunguPrefix = tokens.slice(0, 2).join(' ');
 
         const trySigunguFallback = () => {
-          if (!sigunguPrefix) return resolve(null);
+          if (!sigunguPrefix) return finishWith(null);
           places.keywordSearch(sigunguPrefix, function (sData, sStatus) {
             if (sStatus === kakao.maps.services.Status.OK && sData && sData[0]) {
               const jitterLat = ((Math.random() - 0.5) * 0.008);
               const jitterLng = ((Math.random() - 0.5) * 0.008);
-              resolve({ lat: Number(sData[0].y) + jitterLat, lng: Number(sData[0].x) + jitterLng });
+              finishWith({ lat: Number(sData[0].y) + jitterLat, lng: Number(sData[0].x) + jitterLng });
             } else {
-              resolve(null);
+              finishWith(null);
             }
           });
         };
@@ -984,11 +1020,11 @@
           if (!kw) return trySigunguFallback();
           places.keywordSearch(kw, function (data, status) {
             if (status === kakao.maps.services.Status.OK && data && data[0]) {
-              resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
+              finishWith({ lat: Number(data[0].y), lng: Number(data[0].x) });
             } else {
               places.keywordSearch(site.name, function (data2, status2) {
                 if (status2 === kakao.maps.services.Status.OK && data2 && data2[0]) {
-                  resolve({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
+                  finishWith({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
                 } else {
                   trySigunguFallback();
                 }
@@ -1000,14 +1036,14 @@
         const primaryKw = `${sigunguPrefix} ${site.name}`.trim();
         places.keywordSearch(primaryKw, function (pData, pStatus) {
           if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
-            return resolve({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
+            return finishWith({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
           }
 
           if (!cleaned) return tryKeywordFallback();
 
           geocoder.addressSearch(cleaned, function (result, status) {
             if (status === kakao.maps.services.Status.OK && result && result[0]) {
-              resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+              finishWith({ lat: Number(result[0].y), lng: Number(result[0].x) });
             } else {
               tryKeywordFallback();
             }
@@ -1246,21 +1282,8 @@
         runSearch();
       };
 
-      let apiSites = [];
-      try {
-        apiSites = await fetchFirstComeSites();
-      } catch (e) {
-        apiSites = [...VERIFIED_EXTRA_SITES];
-      }
-
-      const coordResults = await Promise.all(
-        apiSites.map((site) => resolveAccurateCoords(geocoder, places, site))
-      );
-
-      apiSites.forEach((site, idx) => {
-        const coords = coordResults[idx];
+      function addSitePinToMap(site, idx, coords) {
         if (!coords) return;
-
         const pos = new kakao.maps.LatLng(coords.lat, coords.lng);
         const marker = new kakao.maps.Marker({ map: map, position: pos });
         const viewers = getDynamicViewers(site, idx);
@@ -1295,7 +1318,41 @@
         });
 
         renderedItems.push({ site, idx, marker, overlay, badge, pos, openPanel });
+      }
+
+      let apiSites = [];
+      try {
+        apiSites = await fetchFirstComeSites();
+      } catch (e) {
+        apiSites = [...VERIFIED_EXTRA_SITES];
+      }
+
+      // 1차: 캐시된 좌표 및 고정 현장을 먼저 즉시 지도에 표시
+      const remainingSites = [];
+      apiSites.forEach((site, idx) => {
+        const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
+        const cached = (site.fallbackLat && site.fallbackLng)
+          ? { lat: site.fallbackLat, lng: site.fallbackLng }
+          : (cacheKey && coordCache[cacheKey] ? coordCache[cacheKey] : null);
+        if (cached) {
+          addSitePinToMap(site, idx, cached);
+        } else {
+          remainingSites.push({ site, idx });
+        }
       });
+
+      // 2차: 미캐시 현장은 40개씩 묶어 순차 조회 및 표시
+      const BATCH_SIZE = 40;
+      for (let i = 0; i < remainingSites.length; i += BATCH_SIZE) {
+        const chunk = remainingSites.slice(i, i + BATCH_SIZE);
+        const coordsList = await Promise.all(
+          chunk.map(({ site }) => resolveAccurateCoords(geocoder, places, site))
+        );
+        chunk.forEach(({ site, idx }, cIdx) => {
+          addSitePinToMap(site, idx, coordsList[cIdx]);
+        });
+      }
+      saveCoordCache();
 
       isSitesLoaded = true;
       toast.textContent = `분양현장 ${renderedItems.length}곳 표시 중`;
