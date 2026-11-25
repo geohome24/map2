@@ -22,13 +22,14 @@
       background: #ffffff;
       border-radius: 8px;
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
-      overflow: hidden;
+      overflow: visible;
       box-sizing: border-box;
     }
     .region-tabs {
       display: flex;
       border-bottom: 1px solid #e5e7eb;
       background: #ffffff;
+      border-radius: 8px 8px 0 0;
       overflow-x: auto;
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
@@ -92,8 +93,10 @@
       gap: 4px;
       padding: 4px 6px;
       background: #ffffff;
+      border-radius: 0 0 8px 8px;
       width: 100%;
       box-sizing: border-box;
+      position: relative;
     }
     #search-input {
       flex: 1;
@@ -124,6 +127,49 @@
     #reset-btn {
       background: #e5e7eb;
       color: #111827;
+    }
+    #search-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 4px;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+      max-height: 210px;
+      overflow-y: auto;
+      z-index: 45;
+    }
+    .search-option {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border: none;
+      border-bottom: 1px solid #f1f5f9;
+      background: #ffffff;
+      cursor: pointer;
+    }
+    .search-option:last-child {
+      border-bottom: none;
+    }
+    .search-option:hover, .search-option:active {
+      background: #eff6ff;
+    }
+    .search-option-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #111827;
+      display: block;
+    }
+    .search-option-sub {
+      font-size: 11px;
+      color: #6b7280;
+      display: block;
+      margin-top: 1px;
     }
     #status-toast {
       position: fixed;
@@ -293,9 +339,10 @@
       <div class="district-grid" id="district-grid"></div>
     </div>
     <div class="search-row">
-      <input id="search-input" type="text" placeholder="현장명·구 검색" />
+      <input id="search-input" type="text" placeholder="현장명·구 검색 (띄어쓰기 무관)" autocomplete="off" />
       <button id="search-btn" type="button">검색</button>
       <button id="reset-btn" type="button">전체</button>
+      <div id="search-dropdown"></div>
     </div>
   </div>
   <div id="status-toast">정당계약일 이후 분양현장 불러오는 중...</div>
@@ -336,7 +383,32 @@
 
     const STATUS_TEXT = '상담진행중(분양마감 확인 필요)';
 
-    // 날짜 표기 통일: YYYYMMDD -> YYYY-MM-DD, YYYYMM -> YYYY-MM
+    // 공백, 하이픈, 가운뎃점 등을 제거해 띄어쓰기·기호 차이 없이 매칭
+    function normalizeSearchKey(str) {
+      return String(str || '')
+        .toLowerCase()
+        .replace(/[\s\-·.,()\[\]/_]+/g, '');
+    }
+
+    function matchesFlexibleQuery(item, rawQuery) {
+      const trimmed = String(rawQuery || '').trim();
+      if (!trimmed) return true;
+
+      const combinedText = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''}`;
+      const normHay = normalizeSearchKey(combinedText);
+      const compactQuery = normalizeSearchKey(trimmed);
+
+      if (compactQuery && normHay.includes(compactQuery)) {
+        return true;
+      }
+
+      const tokens = trimmed.split(/\s+/).map(normalizeSearchKey).filter(Boolean);
+      if (tokens.length > 1) {
+        return tokens.every((tok) => normHay.includes(tok));
+      }
+      return false;
+    }
+
     function formatHyphenDate(val) {
       if (!val) return '';
       const digits = String(val).replace(/[^0-9]/g, '');
@@ -714,9 +786,9 @@
         };
       });
 
-      const existingNames = new Set(apiMapped.map((s) => s.name.replace(/\s+/g, '')));
+      const existingNames = new Set(apiMapped.map((s) => normalizeSearchKey(s.name)));
       VERIFIED_EXTRA_SITES.forEach((extraSite) => {
-        const norm = extraSite.name.replace(/\s+/g, '');
+        const norm = normalizeSearchKey(extraSite.name);
         if (!existingNames.has(norm)) {
           apiMapped.unshift(extraSite);
         }
@@ -780,6 +852,7 @@
       const panel = document.getElementById('detail-panel');
       const drawer = document.getElementById('district-drawer');
       const districtGrid = document.getElementById('district-grid');
+      const dropdown = document.getElementById('search-dropdown');
 
       let activeRegionKey = 'busan';
       let isDrawerOpen = false;
@@ -900,7 +973,7 @@
           yAnchor: 2.35
         });
 
-        renderedItems.push({ site, idx, marker, overlay, badge, pos });
+        renderedItems.push({ site, idx, marker, overlay, badge, pos, openPanel });
       }
 
       toast.textContent = `분양현장 ${renderedItems.length}곳 표시 중`;
@@ -913,10 +986,64 @@
         });
       }, 60 * 1000);
 
+      function hideDropdown() {
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
+      }
+
+      function focusMatchedItem(item) {
+        map.setCenter(item.pos);
+        map.setLevel(5);
+        item.openPanel();
+        hideDropdown();
+      }
+
+      function renderSearchDropdown(matched) {
+        dropdown.innerHTML = '';
+        if (!matched.length) {
+          hideDropdown();
+          return;
+        }
+        matched.forEach((item) => {
+          const optBtn = document.createElement('button');
+          optBtn.type = 'button';
+          optBtn.className = 'search-option';
+
+          const titleEl = document.createElement('span');
+          titleEl.className = 'search-option-title';
+          titleEl.textContent = item.site.name;
+
+          const subEl = document.createElement('span');
+          subEl.className = 'search-option-sub';
+          subEl.textContent = item.site.rawAddress || item.site.areaName || '위치 확인 가능';
+
+          optBtn.appendChild(titleEl);
+          optBtn.appendChild(subEl);
+          optBtn.onclick = function () {
+            focusMatchedItem(item);
+          };
+          dropdown.appendChild(optBtn);
+        });
+        dropdown.style.display = 'block';
+      }
+
       const searchInput = document.getElementById('search-input');
-      const runSearch = function () {
-        const q = searchInput.value.trim().toLowerCase();
+
+      const previewMatches = function () {
+        const q = searchInput.value.trim();
         if (!q) {
+          hideDropdown();
+          return [];
+        }
+        const matched = renderedItems.filter((item) => matchesFlexibleQuery(item, q));
+        renderSearchDropdown(matched);
+        return matched;
+      };
+
+      const runSearch = function () {
+        const rawQ = searchInput.value.trim();
+        if (!rawQ) {
+          hideDropdown();
           renderedItems.forEach((item) => {
             item.marker.setMap(map);
             item.overlay.setMap(map);
@@ -928,8 +1055,7 @@
 
         const matched = [];
         renderedItems.forEach((item) => {
-          const hay = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''}`.toLowerCase();
-          if (hay.includes(q)) {
+          if (matchesFlexibleQuery(item, rawQ)) {
             item.marker.setMap(map);
             item.overlay.setMap(map);
             matched.push(item);
@@ -939,16 +1065,21 @@
           }
         });
 
-        if (matched.length > 0) {
+        if (matched.length === 1) {
+          focusMatchedItem(matched[0]);
+        } else if (matched.length > 1) {
+          renderSearchDropdown(matched);
           map.setCenter(matched[0].pos);
-          map.setLevel(matched.length === 1 ? 5 : 8);
+          map.setLevel(8);
         } else {
+          hideDropdown();
           toast.style.display = 'block';
-          toast.textContent = `'${searchInput.value.trim()}' 검색 결과가 없습니다.`;
+          toast.textContent = `'${rawQ}' 검색 결과가 없습니다.`;
           setTimeout(() => { toast.style.display = 'none'; }, 2500);
         }
       };
 
+      searchInput.oninput = previewMatches;
       document.getElementById('search-btn').onclick = runSearch;
       searchInput.onkeydown = function (e) {
         if (e.key === 'Enter') runSearch();
