@@ -247,7 +247,7 @@
       <button id="reset-btn" type="button">부산전체</button>
     </div>
   </div>
-  <div id="status-toast">전국 분양현장 불러오는 중...</div>
+  <div id="status-toast">정당계약일 이후 선착순 분양현장 불러오는 중...</div>
 
   <div id="map"></div>
 
@@ -278,7 +278,6 @@
     const API_SERVICE_KEY = '935de5c23598a914dd97149a0b92614db7f4de28d991d658d58dfaca03bad3a7';
     const API_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
 
-    // 구·군 단위 중심 좌표(구청/시청 기준)
     const REGION_DATA = {
       busan: {
         label: '부산',
@@ -373,27 +372,6 @@
       }
     };
 
-    const fallbackSites = [
-      {
-        name: '힐스테이트 연산',
-        address: '부산광역시 연제구 연산동',
-        status: '선착순 미분양 상담중',
-        defaultPriceMan: 68000,
-        lat: 35.1846,
-        lng: 129.0807,
-        desc: '• 주변 생활: 연산초 도보 4분, 거제역·연제구 보건소 인접, 대형마트 차량 5분\n• 주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~6.4억 원대'
-      },
-      {
-        name: '한화포레나 덕천3차',
-        address: '부산광역시 북구 덕천동',
-        status: '선착순 미분양 상담중',
-        defaultPriceMan: 52000,
-        lat: 35.2106,
-        lng: 129.0056,
-        desc: '• 주변 생활: 덕천초·덕천중 도보권, 구포성심병원·덕천역 인접, 상권 밀집\n• 주변 시세: 인근 84㎡ 최근 실거래 약 3.8억~4.5억 원대'
-      }
-    ];
-
     function getSlotIndex30Min() {
       return Math.floor(Date.now() / (30 * 60 * 1000));
     }
@@ -435,44 +413,112 @@
         `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
     }
 
-    async function fetchCheongyakSites() {
-      const url = `${API_ENDPOINT}?page=1&perPage=60&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
+    function getTodayYYYYMMDD() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}${m}${d}`;
+    }
+
+    function normalizeDateDigits(val) {
+      if (!val) return '';
+      return String(val).replace(/[^0-9]/g, '').slice(0, 8);
+    }
+
+    // 주소 정제: 지오코더 오인식을 일으키는 '일원', '외 N필지', 괄호, 블록 표기 제거
+    function cleanSupplyAddress(rawAddr) {
+      if (!rawAddr) return '';
+      return String(rawAddr)
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/외\s*\d+\s*필지.*/g, '')
+        .replace(/일원.*/g, '')
+        .replace(/일대.*/g, '')
+        .replace(/[A-Za-z0-9-]+블록.*/g, '')
+        .replace(/지구.*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    async function fetchFirstComeSites() {
+      // 최신 공고 200건을 조회하여 정당계약 종료일(CNTRCT_CNCLS_ENDDE)이 지난 현장만 선별
+      const url = `${API_ENDPOINT}?page=1&perPage=200&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('API 응답 오류');
       const json = await res.json();
       const rows = Array.isArray(json.data) ? json.data : [];
-      if (!rows.length) throw new Error('데이터 없음');
+      const todayStr = getTodayYYYYMMDD();
 
-      return rows.map((row, idx) => {
+      const filtered = rows.filter((row) => {
+        const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
+        return contractEnd && contractEnd.length === 8 && contractEnd < todayStr;
+      });
+
+      return filtered.map((row, idx) => {
         const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
-        const address = row.HSSPLY_ADRES || row.SUBSCRPT_AREA_CODE_NM || '';
+        const rawAddress = row.HSSPLY_ADRES || '';
+        const areaName = row.SUBSCRPT_AREA_CODE_NM || '';
         const supplyCnt = row.TOT_SUPLY_HSHLDCO ? `총 ${row.TOT_SUPLY_HSHLDCO}세대` : '';
+        const contractEndRaw = row.CNTRCT_CNCLS_ENDDE ? `정당계약종료 ${row.CNTRCT_CNCLS_ENDDE}` : '';
         const moveIn = row.MVN_PREARNGE_YM ? `입주예정 ${row.MVN_PREARNGE_YM}` : '';
         const tel = row.MDHS_TELNO ? `문의 ${row.MDHS_TELNO}` : '';
-        const extra = [supplyCnt, moveIn, tel].filter(Boolean).join(' · ');
+        const extra = [supplyCnt, contractEndRaw, moveIn, tel].filter(Boolean).join(' · ');
 
         return {
           name,
-          address,
+          rawAddress,
+          areaName,
           status: '선착순 미분양 상담중',
           defaultPriceMan: 55000,
           desc:
-            `• 위치: ${address}\n` +
-            `• 단지 정보: ${extra || '선착순 동·호수 지정 상담 진행 중'}\n` +
-            `• 주변 생활·시세: 인근 초·중·고 학군, 병의원·상업시설 인접 (상세 시세 및 로열층 잔여세대 카톡 문의)`
+            `• 공급위치: ${rawAddress || areaName}\n` +
+            `• 분양정보: ${extra || '정당계약일 경과 · 선착순 동·호수 지정 중'}\n` +
+            `• 주변 생활·시세: 인근 초·중·고 학군, 병의원·상업시설 인접 (상세 시세 및 잔여 로열층 카톡 문의)`
         };
       });
     }
 
-    function geocodeAddress(geocoder, address) {
+    // 1차: 정제된 도로명/지번 주소 정확 검색 -> 2차: 시/군/구 + 단지명 키워드 검색으로 위치 오차 최소화
+    function resolveAccurateCoords(geocoder, places, site) {
       return new Promise((resolve) => {
-        if (!address) return resolve(null);
-        const cleanAddr = address.replace(/\([^)]*\)/g, '').trim();
-        geocoder.addressSearch(cleanAddr, function (result, status) {
+        const cleaned = cleanSupplyAddress(site.rawAddress);
+        const tokens = cleaned.split(' ');
+        const sigunguPrefix = tokens.slice(0, 2).join(' ');
+
+        const tryKeywordFallback = () => {
+          const kw = `${sigunguPrefix} ${site.name}`.trim();
+          if (!kw) return resolve(null);
+          places.keywordSearch(kw, function (data, status) {
+            if (status === kakao.maps.services.Status.OK && data && data[0]) {
+              resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
+            } else {
+              resolve(null);
+            }
+          });
+        };
+
+        if (!cleaned) {
+          return tryKeywordFallback();
+        }
+
+        geocoder.addressSearch(cleaned, function (result, status) {
           if (status === kakao.maps.services.Status.OK && result && result[0]) {
-            resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+            const item = result[0];
+            // 동 단위까지만 잡히고 번지가 없는 부정확 결과면 키워드 검색 우선 시도
+            const hasExactDetail = Boolean((item.road_address && item.road_address.building_name) || (item.address && item.address.main_address_no));
+            if (hasExactDetail) {
+              resolve({ lat: Number(item.y), lng: Number(item.x) });
+            } else {
+              places.keywordSearch(`${sigunguPrefix} ${site.name}`.trim(), function (pData, pStatus) {
+                if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
+                  resolve({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
+                } else {
+                  resolve({ lat: Number(item.y), lng: Number(item.x) });
+                }
+              });
+            }
           } else {
-            resolve(null);
+            tryKeywordFallback();
           }
         });
       });
@@ -480,12 +526,12 @@
 
     kakao.maps.load(async function () {
       const mapEl = document.getElementById('map');
-      // 기본 시작 중심: 부산
       const map = new kakao.maps.Map(mapEl, {
         center: new kakao.maps.LatLng(35.1796, 129.0756),
         level: 8
       });
       const geocoder = new kakao.maps.services.Geocoder();
+      const places = new kakao.maps.services.Places();
       const toast = document.getElementById('status-toast');
       const panel = document.getElementById('detail-panel');
       const drawer = document.getElementById('district-drawer');
@@ -566,29 +612,27 @@
       };
       priceInput.oninput = updateCalc;
 
-      let rawSites = [];
+      let apiSites = [];
       try {
-        rawSites = await fetchCheongyakSites();
-        rawSites = [...fallbackSites, ...rawSites];
+        apiSites = await fetchFirstComeSites();
       } catch (e) {
-        rawSites = fallbackSites;
+        toast.textContent = '청약홈 API 데이터를 불러오지 못했습니다.';
+        return;
+      }
+
+      if (!apiSites.length) {
+        toast.textContent = '정당계약일 이후 선착순 현장이 없습니다.';
+        return;
       }
 
       const renderedItems = [];
 
-      for (let idx = 0; idx < rawSites.length; idx++) {
-        const site = rawSites[idx];
-        let lat = site.lat;
-        let lng = site.lng;
+      for (let idx = 0; idx < apiSites.length; idx++) {
+        const site = apiSites[idx];
+        const coords = await resolveAccurateCoords(geocoder, places, site);
+        if (!coords) continue;
 
-        if (!lat || !lng) {
-          const coords = await geocodeAddress(geocoder, site.address);
-          if (!coords) continue;
-          lat = coords.lat;
-          lng = coords.lng;
-        }
-
-        const pos = new kakao.maps.LatLng(lat, lng);
+        const pos = new kakao.maps.LatLng(coords.lat, coords.lng);
         const marker = new kakao.maps.Marker({ map: map, position: pos });
         const viewers = getDynamicViewers(site, idx);
 
@@ -600,10 +644,10 @@
           const curViewers = getDynamicViewers(site, idx);
           badge.textContent = `${site.name} · ${curViewers}명 보는중`;
           document.getElementById('site-title').textContent = site.name;
-          document.getElementById('site-status').textContent = site.status || '선착순 미분양 상담중';
+          document.getElementById('site-status').textContent = site.status;
           document.getElementById('site-viewers').textContent = `현재 ${curViewers}명 보는중`;
-          document.getElementById('site-desc').textContent = site.desc || '';
-          priceInput.value = site.defaultPriceMan || 55000;
+          document.getElementById('site-desc').textContent = site.desc;
+          priceInput.value = site.defaultPriceMan;
           updateCalc();
           panel.style.display = 'block';
         };
@@ -621,8 +665,8 @@
         renderedItems.push({ site, idx, marker, overlay, badge, pos });
       }
 
-      toast.textContent = `전국 분양현장 ${renderedItems.length}곳 표시 중`;
-      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      toast.textContent = `선착순 분양현장 ${renderedItems.length}곳 표시 중`;
+      setTimeout(() => { toast.style.display = 'none'; }, 3500);
 
       setInterval(function () {
         renderedItems.forEach(function (item) {
@@ -646,7 +690,7 @@
 
         const matched = [];
         renderedItems.forEach((item) => {
-          const hay = `${item.site.name} ${item.site.address || ''}`.toLowerCase();
+          const hay = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''}`.toLowerCase();
           if (hay.includes(q)) {
             item.marker.setMap(map);
             item.overlay.setMap(map);
