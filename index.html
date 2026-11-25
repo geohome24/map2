@@ -317,7 +317,6 @@
 
     const STATUS_TEXT = '상담진행중(분양마감 확인 필요)';
 
-    // 지역별 주변 시세(84㎡ 기준) 및 입지 정보 매핑
     function buildMarketSummary(address, areaName) {
       const target = `${address || ''} ${areaName || ''}`;
       if (target.includes('해운대구') || target.includes('수영구')) {
@@ -597,8 +596,8 @@
         const supplyCnt = row.TOT_SUPLY_HSHLDCO ? `총 ${row.TOT_SUPLY_HSHLDCO}세대` : '';
         const contractEndRaw = row.CNTRCT_CNCLS_ENDDE ? `정당계약종료 ${row.CNTRCT_CNCLS_ENDDE}` : '';
         const moveIn = row.MVN_PREARNGE_YM ? `입주예정 ${row.MVN_PREARNGE_YM}` : '';
-        const tel = row.MDHS_TELNO ? `문의 ${row.MDHS_TELNO}` : '';
-        const extra = [supplyCnt, contractEndRaw, moveIn, tel].filter(Boolean).join(' · ');
+        // 현장 대표번호(MDHS_TELNO) 제외
+        const extra = [supplyCnt, contractEndRaw, moveIn].filter(Boolean).join(' · ');
 
         const realPriceMan = modelData.priceMap.get(manageNo);
         const typeLabel = modelData.infoMap.get(manageNo);
