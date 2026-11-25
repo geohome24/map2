@@ -12,20 +12,130 @@
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
     }
+    #top-nav-wrap {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 38;
+      max-width: 680px;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+    }
+    .region-tabs {
+      display: flex;
+      border-bottom: 1px solid #e5e7eb;
+      background: #ffffff;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .region-tab {
+      flex: 1;
+      min-width: 84px;
+      padding: 11px 8px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      color: #374151;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .region-tab.active {
+      background: #e5e9f0;
+      color: #1d4ed8;
+    }
+    .region-tab .arrow {
+      font-size: 10px;
+    }
+    #district-drawer {
+      display: none;
+      padding: 10px 12px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .district-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .district-btn {
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #1f2937;
+      cursor: pointer;
+    }
+    .district-btn.selected {
+      background: #1d4ed8;
+      color: #ffffff;
+      border-color: #1d4ed8;
+    }
+    .search-row {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      background: #ffffff;
+    }
+    #search-input {
+      flex: 1;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    #search-btn, #reset-btn {
+      border: none;
+      border-radius: 6px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #search-btn {
+      background: #111827;
+      color: #ffffff;
+    }
+    #reset-btn {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    #status-toast {
+      position: fixed;
+      top: 104px;
+      left: 12px;
+      z-index: 34;
+      background: rgba(17, 24, 39, 0.85);
+      color: #fff;
+      font-size: 11.5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+    }
     #detail-panel {
       display: none;
       position: fixed;
       right: 16px;
       bottom: 16px;
-      width: 340px;
+      width: 350px;
       max-width: calc(100% - 32px);
-      max-height: calc(100% - 32px);
+      max-height: calc(100% - 120px);
       overflow-y: auto;
       background: #ffffff;
       border-radius: 12px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
       padding: 16px;
-      z-index: 30;
+      z-index: 40;
       box-sizing: border-box;
     }
     #close-btn {
@@ -55,7 +165,7 @@
       border-radius: 8px;
       font-size: 12px;
       color: #444;
-      line-height: 1.5;
+      line-height: 1.55;
       white-space: pre-line;
     }
     .calc-box {
@@ -117,9 +227,28 @@
       border-radius: 8px;
     }
   </style>
-  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=42553244187f3d43b01f98a4468460dc&autoload=false"></script>
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=42553244187f3d43b01f98a4468460dc&libraries=services&autoload=false"></script>
 </head>
 <body>
+  <div id="top-nav-wrap">
+    <div class="region-tabs" id="region-tabs">
+      <button type="button" class="region-tab active" data-region="busan">부산 <span class="arrow">▼</span></button>
+      <button type="button" class="region-tab" data-region="ulgyeong">울산·경남 <span class="arrow">▼</span></button>
+      <button type="button" class="region-tab" data-region="daegyeong">대구·경북 <span class="arrow">▼</span></button>
+      <button type="button" class="region-tab" data-region="capital">서울·수도권 <span class="arrow">▼</span></button>
+      <button type="button" class="region-tab" data-region="etc">충청·전라·강원</button>
+    </div>
+    <div id="district-drawer">
+      <div class="district-grid" id="district-grid"></div>
+    </div>
+    <div class="search-row">
+      <input id="search-input" type="text" placeholder="현장명 또는 구·지역명 검색 (예: 연산, 힐스테이트)" />
+      <button id="search-btn" type="button">검색</button>
+      <button id="reset-btn" type="button">부산전체</button>
+    </div>
+  </div>
+  <div id="status-toast">전국 분양현장 불러오는 중...</div>
+
   <div id="map"></div>
 
   <div id="detail-panel">
@@ -146,13 +275,109 @@
   </div>
 
   <script>
-    const STATUS_TEXT = '선착순 미분양 상담중';
+    const API_SERVICE_KEY = '935de5c23598a914dd97149a0b92614db7f4de28d991d658d58dfaca03bad3a7';
+    const API_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
 
-    const defaultSites = [
+    // 구·군 단위 중심 좌표(구청/시청 기준)
+    const REGION_DATA = {
+      busan: {
+        label: '부산',
+        center: { lat: 35.1796, lng: 129.0756, level: 8 },
+        districts: [
+          { name: '부산 전체', lat: 35.1796, lng: 129.0756, level: 8 },
+          { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
+          { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
+          { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
+          { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
+          { name: '부산진구', lat: 35.1628, lng: 129.0531, level: 5 },
+          { name: '동래구', lat: 35.2048, lng: 129.0836, level: 5 },
+          { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
+          { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
+          { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
+          { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
+          { name: '금정구', lat: 35.2430, lng: 129.0921, level: 5 },
+          { name: '강서구', lat: 35.2122, lng: 128.9806, level: 6 },
+          { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
+          { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
+          { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
+          { name: '기장군', lat: 35.2446, lng: 129.2223, level: 6 }
+        ]
+      },
+      ulgyeong: {
+        label: '울산·경남',
+        center: { lat: 35.3500, lng: 128.9000, level: 9 },
+        districts: [
+          { name: '울산 중구', lat: 35.5694, lng: 129.3328, level: 6 },
+          { name: '울산 남구', lat: 35.5440, lng: 129.3302, level: 6 },
+          { name: '울산 동구', lat: 35.5047, lng: 129.4166, level: 6 },
+          { name: '울산 북구', lat: 35.5824, lng: 129.3611, level: 6 },
+          { name: '울주군', lat: 35.5222, lng: 129.2423, level: 7 },
+          { name: '창원시', lat: 35.2280, lng: 128.6811, level: 7 },
+          { name: '김해시', lat: 35.2285, lng: 128.8894, level: 6 },
+          { name: '양산시', lat: 35.3350, lng: 129.0372, level: 6 },
+          { name: '거제시', lat: 34.8806, lng: 128.6211, level: 7 },
+          { name: '진주시', lat: 35.1800, lng: 128.1076, level: 7 }
+        ]
+      },
+      daegyeong: {
+        label: '대구·경북',
+        center: { lat: 35.8714, lng: 128.6014, level: 9 },
+        districts: [
+          { name: '대구 중구', lat: 35.8693, lng: 128.6062, level: 5 },
+          { name: '대구 동구', lat: 35.8868, lng: 128.6355, level: 6 },
+          { name: '대구 서구', lat: 35.8719, lng: 128.5591, level: 5 },
+          { name: '대구 남구', lat: 35.8460, lng: 128.5977, level: 5 },
+          { name: '대구 북구', lat: 35.8858, lng: 128.5829, level: 6 },
+          { name: '수성구', lat: 35.8581, lng: 128.6306, level: 6 },
+          { name: '달서구', lat: 35.8298, lng: 128.5327, level: 6 },
+          { name: '달성군', lat: 35.7747, lng: 128.4314, level: 7 },
+          { name: '포항시', lat: 36.0190, lng: 129.3435, level: 7 },
+          { name: '구미시', lat: 36.1195, lng: 128.3446, level: 7 },
+          { name: '경산시', lat: 35.8251, lng: 128.7414, level: 6 }
+        ]
+      },
+      capital: {
+        label: '서울·수도권',
+        center: { lat: 37.5665, lng: 126.9780, level: 9 },
+        districts: [
+          { name: '강남구', lat: 37.5172, lng: 127.0473, level: 6 },
+          { name: '서초구', lat: 37.4837, lng: 127.0324, level: 6 },
+          { name: '송파구', lat: 37.5145, lng: 127.1059, level: 6 },
+          { name: '강동구', lat: 37.5301, lng: 127.1238, level: 6 },
+          { name: '마포구', lat: 37.5663, lng: 126.9016, level: 6 },
+          { name: '용산구', lat: 37.5326, lng: 126.9905, level: 6 },
+          { name: '영등포구', lat: 37.5264, lng: 126.8962, level: 6 },
+          { name: '노원구', lat: 37.6542, lng: 127.0568, level: 6 },
+          { name: '수원시', lat: 37.2636, lng: 127.0286, level: 7 },
+          { name: '성남시', lat: 37.4200, lng: 127.1267, level: 7 },
+          { name: '용인시', lat: 37.2411, lng: 127.1775, level: 7 },
+          { name: '화성시', lat: 37.1995, lng: 126.8312, level: 8 },
+          { name: '인천 연수구', lat: 37.4101, lng: 126.6783, level: 6 },
+          { name: '인천 서구', lat: 37.5454, lng: 126.6760, level: 6 }
+        ]
+      },
+      etc: {
+        label: '충청·전라·강원',
+        center: { lat: 36.3504, lng: 127.3845, level: 11 },
+        districts: [
+          { name: '대전 서구', lat: 36.3554, lng: 127.3837, level: 6 },
+          { name: '대전 유성구', lat: 36.3622, lng: 127.3565, level: 6 },
+          { name: '세종시', lat: 36.4801, lng: 127.2890, level: 7 },
+          { name: '천안시', lat: 36.8151, lng: 127.1139, level: 7 },
+          { name: '청주시', lat: 36.6424, lng: 127.4890, level: 7 },
+          { name: '광주 서구', lat: 35.1520, lng: 126.8895, level: 6 },
+          { name: '전주시', lat: 35.8242, lng: 127.1480, level: 7 },
+          { name: '원주시', lat: 37.3422, lng: 127.9202, level: 7 },
+          { name: '춘천시', lat: 37.8813, lng: 127.7298, level: 7 }
+        ]
+      }
+    };
+
+    const fallbackSites = [
       {
         name: '힐스테이트 연산',
-        status: STATUS_TEXT,
-        baseViewers: 34,
+        address: '부산광역시 연제구 연산동',
+        status: '선착순 미분양 상담중',
         defaultPriceMan: 68000,
         lat: 35.1846,
         lng: 129.0807,
@@ -160,8 +385,8 @@
       },
       {
         name: '한화포레나 덕천3차',
-        status: STATUS_TEXT,
-        baseViewers: 27,
+        address: '부산광역시 북구 덕천동',
+        status: '선착순 미분양 상담중',
         defaultPriceMan: 52000,
         lat: 35.2106,
         lng: 129.0056,
@@ -175,10 +400,13 @@
 
     function getDynamicViewers(site, idx) {
       const slot = getSlotIndex30Min();
-      const base = Number(site.baseViewers) || (25 + ((idx * 7) % 16));
-      const delta = ((slot * 13 + idx * 5 + site.name.length * 3) % 15) - 7;
-      const val = base + delta;
-      return Math.max(20, Math.min(50, val));
+      const seed = site.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+      const base = 20 + ((seed + idx * 7) % 31);
+      const step = ((slot * 3 + idx * 5 + seed) % 7) - 3;
+      const val = base + step;
+      if (val < 20) return 20 + (Math.abs(val) % 5);
+      if (val > 50) return 50 - (val % 5);
+      return val;
     }
 
     function formatManToWonText(man) {
@@ -207,14 +435,115 @@
         `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
     }
 
-    function initMap(sites) {
+    async function fetchCheongyakSites() {
+      const url = `${API_ENDPOINT}?page=1&perPage=60&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('API 응답 오류');
+      const json = await res.json();
+      const rows = Array.isArray(json.data) ? json.data : [];
+      if (!rows.length) throw new Error('데이터 없음');
+
+      return rows.map((row, idx) => {
+        const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
+        const address = row.HSSPLY_ADRES || row.SUBSCRPT_AREA_CODE_NM || '';
+        const supplyCnt = row.TOT_SUPLY_HSHLDCO ? `총 ${row.TOT_SUPLY_HSHLDCO}세대` : '';
+        const moveIn = row.MVN_PREARNGE_YM ? `입주예정 ${row.MVN_PREARNGE_YM}` : '';
+        const tel = row.MDHS_TELNO ? `문의 ${row.MDHS_TELNO}` : '';
+        const extra = [supplyCnt, moveIn, tel].filter(Boolean).join(' · ');
+
+        return {
+          name,
+          address,
+          status: '선착순 미분양 상담중',
+          defaultPriceMan: 55000,
+          desc:
+            `• 위치: ${address}\n` +
+            `• 단지 정보: ${extra || '선착순 동·호수 지정 상담 진행 중'}\n` +
+            `• 주변 생활·시세: 인근 초·중·고 학군, 병의원·상업시설 인접 (상세 시세 및 로열층 잔여세대 카톡 문의)`
+        };
+      });
+    }
+
+    function geocodeAddress(geocoder, address) {
+      return new Promise((resolve) => {
+        if (!address) return resolve(null);
+        const cleanAddr = address.replace(/\([^)]*\)/g, '').trim();
+        geocoder.addressSearch(cleanAddr, function (result, status) {
+          if (status === kakao.maps.services.Status.OK && result && result[0]) {
+            resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+    }
+
+    kakao.maps.load(async function () {
       const mapEl = document.getElementById('map');
+      // 기본 시작 중심: 부산
       const map = new kakao.maps.Map(mapEl, {
-        center: new kakao.maps.LatLng(36.3504, 127.3845),
-        level: 12
+        center: new kakao.maps.LatLng(35.1796, 129.0756),
+        level: 8
+      });
+      const geocoder = new kakao.maps.services.Geocoder();
+      const toast = document.getElementById('status-toast');
+      const panel = document.getElementById('detail-panel');
+      const drawer = document.getElementById('district-drawer');
+      const districtGrid = document.getElementById('district-grid');
+
+      let activeRegionKey = 'busan';
+      let isDrawerOpen = false;
+
+      function renderDistricts(regionKey) {
+        const reg = REGION_DATA[regionKey];
+        if (!reg) return;
+        districtGrid.innerHTML = '';
+        reg.districts.forEach((d) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'district-btn';
+          btn.textContent = d.name;
+          btn.onclick = function () {
+            document.querySelectorAll('.district-btn').forEach((b) => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            map.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
+            map.setLevel(d.level);
+            drawer.style.display = 'none';
+            isDrawerOpen = false;
+          };
+          districtGrid.appendChild(btn);
+        });
+      }
+
+      renderDistricts('busan');
+
+      document.querySelectorAll('.region-tab').forEach((tab) => {
+        tab.onclick = function () {
+          const key = tab.getAttribute('data-region');
+          const wasSame = (activeRegionKey === key);
+
+          document.querySelectorAll('.region-tab').forEach((t) => t.classList.remove('active'));
+          tab.classList.add('active');
+          activeRegionKey = key;
+
+          renderDistricts(key);
+
+          if (wasSame && isDrawerOpen) {
+            drawer.style.display = 'none';
+            isDrawerOpen = false;
+          } else {
+            drawer.style.display = 'block';
+            isDrawerOpen = true;
+          }
+
+          const reg = REGION_DATA[key];
+          if (reg && reg.center) {
+            map.setCenter(new kakao.maps.LatLng(reg.center.lat, reg.center.lng));
+            map.setLevel(reg.center.level);
+          }
+        };
       });
 
-      const panel = document.getElementById('detail-panel');
       document.getElementById('close-btn').onclick = function () {
         panel.style.display = 'none';
       };
@@ -237,32 +566,44 @@
       };
       priceInput.oninput = updateCalc;
 
-      const list = (sites && sites.length) ? sites : defaultSites;
-      const overlays = [];
+      let rawSites = [];
+      try {
+        rawSites = await fetchCheongyakSites();
+        rawSites = [...fallbackSites, ...rawSites];
+      } catch (e) {
+        rawSites = fallbackSites;
+      }
 
-      list.forEach(function (site, idx) {
-        const lat = Number(site.lat);
-        const lng = Number(site.lng);
-        if (!lat || !lng) return;
+      const renderedItems = [];
 
-        const statusStr = site.status || STATUS_TEXT;
-        const viewers = getDynamicViewers(site, idx);
+      for (let idx = 0; idx < rawSites.length; idx++) {
+        const site = rawSites[idx];
+        let lat = site.lat;
+        let lng = site.lng;
+
+        if (!lat || !lng) {
+          const coords = await geocodeAddress(geocoder, site.address);
+          if (!coords) continue;
+          lat = coords.lat;
+          lng = coords.lng;
+        }
 
         const pos = new kakao.maps.LatLng(lat, lng);
         const marker = new kakao.maps.Marker({ map: map, position: pos });
+        const viewers = getDynamicViewers(site, idx);
 
         const badge = document.createElement('div');
         badge.className = 'pin-badge';
-        badge.textContent = `${site.name} · ${statusStr} · ${viewers}명`;
+        badge.textContent = `${site.name} · ${viewers}명 보는중`;
 
         const openPanel = function () {
           const curViewers = getDynamicViewers(site, idx);
-          badge.textContent = `${site.name} · ${statusStr} · ${curViewers}명`;
+          badge.textContent = `${site.name} · ${curViewers}명 보는중`;
           document.getElementById('site-title').textContent = site.name;
-          document.getElementById('site-status').textContent = statusStr;
-          document.getElementById('site-viewers').textContent = `현재 상담 중: ${curViewers}명`;
+          document.getElementById('site-status').textContent = site.status || '선착순 미분양 상담중';
+          document.getElementById('site-viewers').textContent = `현재 ${curViewers}명 보는중`;
           document.getElementById('site-desc').textContent = site.desc || '';
-          priceInput.value = site.defaultPriceMan || 50000;
+          priceInput.value = site.defaultPriceMan || 55000;
           updateCalc();
           panel.style.display = 'block';
         };
@@ -276,25 +617,66 @@
           content: badge,
           yAnchor: 2.35
         });
-        overlays.push({ site, idx, statusStr, badge, overlay });
-      });
+
+        renderedItems.push({ site, idx, marker, overlay, badge, pos });
+      }
+
+      toast.textContent = `전국 분양현장 ${renderedItems.length}곳 표시 중`;
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
 
       setInterval(function () {
-        overlays.forEach(function (item) {
+        renderedItems.forEach(function (item) {
           const v = getDynamicViewers(item.site, item.idx);
-          item.badge.textContent = `${item.site.name} · ${item.statusStr} · ${v}명`;
+          item.badge.textContent = `${item.site.name} · ${v}명 보는중`;
         });
       }, 60 * 1000);
-    }
 
-    window.addEventListener('message', function (event) {
-      if (event.data && event.data.type === 'SITE_DATA' && Array.isArray(event.data.sites)) {
-        initMap(event.data.sites);
-      }
-    });
+      const searchInput = document.getElementById('search-input');
+      const runSearch = function () {
+        const q = searchInput.value.trim().toLowerCase();
+        if (!q) {
+          renderedItems.forEach((item) => {
+            item.marker.setMap(map);
+            item.overlay.setMap(map);
+          });
+          map.setCenter(new kakao.maps.LatLng(35.1796, 129.0756));
+          map.setLevel(8);
+          return;
+        }
 
-    kakao.maps.load(function () {
-      initMap(defaultSites);
+        const matched = [];
+        renderedItems.forEach((item) => {
+          const hay = `${item.site.name} ${item.site.address || ''}`.toLowerCase();
+          if (hay.includes(q)) {
+            item.marker.setMap(map);
+            item.overlay.setMap(map);
+            matched.push(item);
+          } else {
+            item.marker.setMap(null);
+            item.overlay.setMap(null);
+          }
+        });
+
+        if (matched.length > 0) {
+          map.setCenter(matched[0].pos);
+          map.setLevel(matched.length === 1 ? 5 : 8);
+        } else {
+          toast.style.display = 'block';
+          toast.textContent = `'${searchInput.value.trim()}' 검색 결과가 없습니다.`;
+          setTimeout(() => { toast.style.display = 'none'; }, 2500);
+        }
+      };
+
+      document.getElementById('search-btn').onclick = runSearch;
+      searchInput.onkeydown = function (e) {
+        if (e.key === 'Enter') runSearch();
+      };
+      document.getElementById('reset-btn').onclick = function () {
+        searchInput.value = '';
+        drawer.style.display = 'none';
+        isDrawerOpen = false;
+        runSearch();
+      };
     });
   </script>
 </body>
