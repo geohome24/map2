@@ -174,13 +174,32 @@
     }
     .info-box {
       margin-top: 10px;
-      padding: 10px;
+      padding: 10px 12px;
       background: #f7f8fa;
       border-radius: 8px;
       font-size: 12px;
-      color: #444;
-      line-height: 1.55;
-      white-space: pre-line;
+      color: #374151;
+      line-height: 1.65;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .info-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+    .info-line:last-child {
+      margin-bottom: 0;
+    }
+    .info-bullet {
+      flex: 0 0 auto;
+      font-weight: 700;
+      color: #111827;
+    }
+    .info-text {
+      flex: 1;
+      min-width: 0;
     }
     .calc-box {
       margin-top: 12px;
@@ -317,552 +336,86 @@
 
     const STATUS_TEXT = '상담진행중(분양마감 확인 필요)';
 
-    function buildMarketSummary(address, areaName) {
+    // 날짜 포맷 통일: YYYYMMDD -> YYYY-MM-DD, YYYYMM -> YYYY-MM
+    function formatHyphenDate(val) {
+      if (!val) return '';
+      const digits = String(val).replace(/[^0-9]/g, '');
+      if (digits.length >= 8) {
+        return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+      }
+      if (digits.length === 6) {
+        return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
+      }
+      return String(val).trim();
+    }
+
+    function buildMarketLines(address, areaName) {
       const target = `${address || ''} ${areaName || ''}`;
       if (target.includes('해운대구') || target.includes('수영구')) {
-        return '• 주변 시세: 인근 신축·준신축 84㎡ 실거래 약 8.5억~11.5억 원대 형성\n• 주변 생활: 도시철도 역세권·우수 학군·대형백화점 및 해변 생활권 인접';
+        return [
+          '주변 시세: 인근 신축·준신축 84㎡ 실거래 약 8.5억~11.5억 원대 형성',
+          '주변 생활: 도시철도 역세권·우수 학군·대형백화점 및 해변 생활권 인접'
+        ];
       }
       if (target.includes('연제구') || target.includes('동래구') || target.includes('남구')) {
-        return '• 주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~7.2억 원대 형성\n• 주변 생활: 초·중·고 도보 학군, 도시철도 환승권 및 대형마트·병의원 인접';
+        return [
+          '주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~7.2억 원대 형성',
+          '주변 생활: 초·중·고 도보 학군, 도시철도 환승권 및 대형마트·병의원 인접'
+        ];
       }
       if (target.includes('강서구') || target.includes('에코델타')) {
-        return '• 주변 시세: 명지·에코델타시티 84㎡ 최근 실거래 약 4.8억~5.9억 원대 형성\n• 주변 생활: 초·중·고 예정부지 인접, 수변공원·중심상업지구 및 김해공항 접근 우수';
+        return [
+          '주변 시세: 명지·에코델타시티 84㎡ 최근 실거래 약 4.8억~5.9억 원대 형성',
+          '주변 생활: 초·중·고 예정부지 인접, 수변공원·중심상업지구 및 김해공항 접근 우수'
+        ];
       }
       if (target.includes('북구') || target.includes('사상구') || target.includes('사하구') || target.includes('금정구')) {
-        return '• 주변 시세: 인근 84㎡ 최근 실거래 약 3.9억~5.1억 원대 형성\n• 주변 생활: 초·중학교 도보권, 역세권 상업시설·종합병원 및 생활편의시설 인접';
+        return [
+          '주변 시세: 인근 84㎡ 최근 실거래 약 3.9억~5.1억 원대 형성',
+          '주변 생활: 초·중학교 도보권, 역세권 상업시설·종합병원 및 생활편의시설 인접'
+        ];
       }
       if (target.includes('부산진구') || target.includes('동구') || target.includes('중구') || target.includes('서구') || target.includes('영도구')) {
-        return '• 주변 시세: 도심권 인근 84㎡ 최근 실거래 약 4.5억~6.2억 원대 형성\n• 주변 생활: 서면·원도심 상권, 지하철역 및 종합병원·초중고 학군 인접';
+        return [
+          '주변 시세: 도심권 인근 84㎡ 최근 실거래 약 4.5억~6.2억 원대 형성',
+          '주변 생활: 서면·원도심 상권, 지하철역 및 종합병원·초중고 학군 인접'
+        ];
       }
       if (target.includes('기장군')) {
-        return '• 주변 시세: 정관·일광신도시 84㎡ 최근 실거래 약 3.8억~5.2억 원대 형성\n• 주변 생활: 동해선 역세권, 오시리아 관광단지 및 초·중학교·근린공원 인접';
+        return [
+          '주변 시세: 정관·일광신도시 84㎡ 최근 실거래 약 3.8억~5.2억 원대 형성',
+          '주변 생활: 동해선 역세권, 오시리아 관광단지 및 초·중학교·근린공원 인접'
+        ];
       }
       if (target.includes('울산')) {
-        return '• 주변 시세: 울산 주요 주거지 84㎡ 최근 실거래 약 4.5억~6.8억 원대 형성\n• 주변 생활: 초·중·고 학군, 대형마트·종합병원 및 주요 산업단지 직주근접';
+        return [
+          '주변 시세: 울산 주요 주거지 84㎡ 최근 실거래 약 4.5억~6.8억 원대 형성',
+          '주변 생활: 초·중·고 학군, 대형마트·종합병원 및 주요 산업단지 직주근접'
+        ];
       }
       if (target.includes('창원') || target.includes('김해') || target.includes('양산') || target.includes('경남')) {
-        return '• 주변 시세: 경남 주요 택지지구 84㎡ 최근 실거래 약 3.8억~5.5억 원대 형성\n• 주변 생활: 초·중학교 도보 통학권, 중심상권·병의원 및 광역교통망 인접';
+        return [
+          '주변 시세: 경남 주요 택지지구 84㎡ 최근 실거래 약 3.8억~5.5억 원대 형성',
+          '주변 생활: 초·중학교 도보 통학권, 중심상권·병의원 및 광역교통망 인접'
+        ];
       }
       if (target.includes('대구') || target.includes('경북')) {
-        return '• 주변 시세: 대구·경북 주요 주거지 84㎡ 최근 실거래 약 4.2억~6.5억 원대 형성\n• 주변 생활: 도시철도 및 학군지 인접, 대형마트·병의원 생활인프라 완비';
+        return [
+          '주변 시세: 대구·경북 주요 주거지 84㎡ 최근 실거래 약 4.2억~6.5억 원대 형성',
+          '주변 생활: 도시철도 및 학군지 인접, 대형마트·병의원 생활인프라 완비'
+        ];
       }
       if (target.includes('서울')) {
-        return '• 주변 시세: 서울 권역별 84㎡ 최근 실거래 약 11.5억~18.5억 원대 형성\n• 주변 생활: 지하철 역세권, 우수 초·중·고 학군 및 백화점·종합병원 인접';
+        return [
+          '주변 시세: 서울 권역별 84㎡ 최근 실거래 약 11.5억~18.5억 원대 형성',
+          '주변 생활: 지하철 역세권, 우수 초·중·고 학군 및 백화점·종합병원 인접'
+        ];
       }
       if (target.includes('경기') || target.includes('인천')) {
-        return '• 주변 시세: 수도권 주요 택지지구 84㎡ 최근 실거래 약 5.8억~8.8억 원대 형성\n• 주변 생활: 광역철도·GTX 수혜권, 초·중·고 학군 및 중심상업시설 인접';
+        return [
+          '주변 시세: 수도권 주요 택지지구 84㎡ 최근 실거래 약 5.8억~8.8억 원대 형성',
+          '주변 생활: 광역철도·GTX 수혜권, 초·중·고 학군 및 중심상업시설 인접'
+        ];
       }
-      return '• 주변 시세: 해당 권역 신축·준신축 84㎡ 최근 실거래 약 3.8억~5.4억 원대 형성\n• 주변 생활: 인근 초·중·고 학군, 병의원·상업시설 및 주요 간선도로 인접';
-    }
-
-    const VERIFIED_EXTRA_SITES = [
-      {
-        name: '에코델타시티 중흥S-클래스 에듀리버',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
-        areaName: '부산',
-        status: STATUS_TEXT,
-        defaultPriceMan: 56800,
-        desc:
-          '• 공급위치: 부산광역시 강서구 에코델타시티 (2028년 06월 입주예정)\n' +
-          '• 분양정보: 정당계약일 경과 · 잔여세대 상담 진행 중\n' +
-          '• 주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성\n' +
-          '• 주변 생활: 초·중·고 예정부지 도보권, 수변공원·중심상업지구 인접'
-      },
-      {
-        name: '에코델타시티 엘가로제비앙',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
-        areaName: '부산',
-        status: STATUS_TEXT,
-        defaultPriceMan: 55400,
-        desc:
-          '• 공급위치: 부산광역시 강서구 에코델타시티 (2029년 06월 입주예정)\n' +
-          '• 분양정보: 정당계약일 경과 · 잔여세대 상담 진행 중\n' +
-          '• 주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성\n' +
-          '• 주변 생활: 에코델타시티 학군 및 수변·상업 인프라 인접'
-      }
-    ];
-
-    const REGION_DATA = {
-      busan: {
-        label: '부산',
-        center: { lat: 35.1796, lng: 129.0756, level: 8 },
-        districts: [
-          { name: '부산 전체', lat: 35.1796, lng: 129.0756, level: 8 },
-          { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
-          { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
-          { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
-          { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
-          { name: '부산진구', lat: 35.1628, lng: 129.0531, level: 5 },
-          { name: '동래구', lat: 35.2048, lng: 129.0836, level: 5 },
-          { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
-          { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
-          { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
-          { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
-          { name: '금정구', lat: 35.2430, lng: 129.0921, level: 5 },
-          { name: '강서구', lat: 35.2122, lng: 128.9806, level: 6 },
-          { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
-          { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
-          { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
-          { name: '기장군', lat: 35.2446, lng: 129.2223, level: 6 }
-        ]
-      },
-      ulgyeong: {
-        label: '울산·경남',
-        center: { lat: 35.3500, lng: 128.9000, level: 9 },
-        districts: [
-          { name: '울산 중구', lat: 35.5694, lng: 129.3328, level: 6 },
-          { name: '울산 남구', lat: 35.5440, lng: 129.3302, level: 6 },
-          { name: '울산 동구', lat: 35.5047, lng: 129.4166, level: 6 },
-          { name: '울산 북구', lat: 35.5824, lng: 129.3611, level: 6 },
-          { name: '울주군', lat: 35.5222, lng: 129.2423, level: 7 },
-          { name: '창원시', lat: 35.2280, lng: 128.6811, level: 7 },
-          { name: '김해시', lat: 35.2285, lng: 128.8894, level: 6 },
-          { name: '양산시', lat: 35.3350, lng: 129.0372, level: 6 },
-          { name: '거제시', lat: 34.8806, lng: 128.6211, level: 7 },
-          { name: '진주시', lat: 35.1800, lng: 128.1076, level: 7 }
-        ]
-      },
-      daegyeong: {
-        label: '대구·경북',
-        center: { lat: 35.8714, lng: 128.6014, level: 9 },
-        districts: [
-          { name: '대구 중구', lat: 35.8693, lng: 128.6062, level: 5 },
-          { name: '대구 동구', lat: 35.8868, lng: 128.6355, level: 6 },
-          { name: '대구 서구', lat: 35.8719, lng: 128.5591, level: 5 },
-          { name: '대구 남구', lat: 35.8460, lng: 128.5977, level: 5 },
-          { name: '대구 북구', lat: 35.8858, lng: 128.5829, level: 6 },
-          { name: '수성구', lat: 35.8581, lng: 128.6306, level: 6 },
-          { name: '달서구', lat: 35.8298, lng: 128.5327, level: 6 },
-          { name: '달성군', lat: 35.7747, lng: 128.4314, level: 7 },
-          { name: '포항시', lat: 36.0190, lng: 129.3435, level: 7 },
-          { name: '구미시', lat: 36.1195, lng: 128.3446, level: 7 },
-          { name: '경산시', lat: 35.8251, lng: 128.7414, level: 6 }
-        ]
-      },
-      capital: {
-        label: '서울·수도권',
-        center: { lat: 37.5665, lng: 126.9780, level: 9 },
-        districts: [
-          { name: '강남구', lat: 37.5172, lng: 127.0473, level: 6 },
-          { name: '서초구', lat: 37.4837, lng: 127.0324, level: 6 },
-          { name: '송파구', lat: 37.5145, lng: 127.1059, level: 6 },
-          { name: '강동구', lat: 37.5301, lng: 127.1238, level: 6 },
-          { name: '마포구', lat: 37.5663, lng: 126.9016, level: 6 },
-          { name: '용산구', lat: 37.5326, lng: 126.9905, level: 6 },
-          { name: '영등포구', lat: 37.5264, lng: 126.8962, level: 6 },
-          { name: '노원구', lat: 37.6542, lng: 127.0568, level: 6 },
-          { name: '수원시', lat: 37.2636, lng: 127.0286, level: 7 },
-          { name: '성남시', lat: 37.4200, lng: 127.1267, level: 7 },
-          { name: '용인시', lat: 37.2411, lng: 127.1775, level: 7 },
-          { name: '화성시', lat: 37.1995, lng: 126.8312, level: 8 },
-          { name: '인천 연수구', lat: 37.4101, lng: 126.6783, level: 6 },
-          { name: '인천 서구', lat: 37.5454, lng: 126.6760, level: 6 }
-        ]
-      },
-      etc: {
-        label: '충청·전라·강원',
-        center: { lat: 36.3504, lng: 127.3845, level: 11 },
-        districts: [
-          { name: '대전 서구', lat: 36.3554, lng: 127.3837, level: 6 },
-          { name: '대전 유성구', lat: 36.3622, lng: 127.3565, level: 6 },
-          { name: '세종시', lat: 36.4801, lng: 127.2890, level: 7 },
-          { name: '천안시', lat: 36.8151, lng: 127.1139, level: 7 },
-          { name: '청주시', lat: 36.6424, lng: 127.4890, level: 7 },
-          { name: '광주 서구', lat: 35.1520, lng: 126.8895, level: 6 },
-          { name: '전주시', lat: 35.8242, lng: 127.1480, level: 7 },
-          { name: '원주시', lat: 37.3422, lng: 127.9202, level: 7 },
-          { name: '춘천시', lat: 37.8813, lng: 127.7298, level: 7 }
-        ]
-      }
-    };
-
-    function getSlotIndex30Min() {
-      return Math.floor(Date.now() / (30 * 60 * 1000));
-    }
-
-    function getDynamicViewers(site, idx) {
-      const slot = getSlotIndex30Min();
-      const seed = site.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-      const base = 20 + ((seed + idx * 7) % 31);
-      const step = ((slot * 3 + idx * 5 + seed) % 7) - 3;
-      const val = base + step;
-      if (val < 20) return 20 + (Math.abs(val) % 5);
-      if (val > 50) return 50 - (val % 5);
-      return val;
-    }
-
-    function formatManToWonText(man) {
-      const n = Math.max(0, Math.round(Number(man) || 0));
-      const eok = Math.floor(n / 10000);
-      const remMan = n % 10000;
-      const manStr = n.toLocaleString('ko-KR') + '만원';
-      if (eok > 0) {
-        return remMan > 0 ? `${eok}억 ${remMan.toLocaleString('ko-KR')}만원` : `${eok}억 원`;
-      }
-      return manStr;
-    }
-
-    let currentRate = 0.05;
-
-    function updateCalc() {
-      const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
-      const downMan = Math.round(totalMan * currentRate);
-      const middleMan = Math.round(totalMan * 0.60);
-      const balanceMan = Math.max(0, totalMan - downMan - middleMan);
-
-      document.getElementById('calc-result').innerHTML =
-        `총분양대금: <strong>${formatManToWonText(totalMan)}</strong><br>` +
-        `• 계약금 (${Math.round(currentRate * 100)}%): <strong>${formatManToWonText(downMan)}</strong><br>` +
-        `• 중도금 (60%): <strong>${formatManToWonText(middleMan)}</strong><br>` +
-        `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
-    }
-
-    function getTodayYYYYMMDD() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return `${y}${m}${d}`;
-    }
-
-    function normalizeDateDigits(val) {
-      if (!val) return '';
-      return String(val).replace(/[^0-9]/g, '').slice(0, 8);
-    }
-
-    function cleanSupplyAddress(rawAddr) {
-      if (!rawAddr) return '';
-      return String(rawAddr)
-        .replace(/\([^)]*\)/g, ' ')
-        .replace(/외\s*\d+\s*필지.*/g, '')
-        .replace(/일원.*/g, '')
-        .replace(/일대.*/g, '')
-        .replace(/[A-Za-z0-9-]+블록.*/g, '')
-        .replace(/지구.*/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    async function fetchModelPriceMap() {
-      const priceMap = new Map();
-      const infoMap = new Map();
-      try {
-        const url = `${API_MODEL_ENDPOINT}?page=1&perPage=1000&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
-        const res = await fetch(url);
-        if (!res.ok) return { priceMap, infoMap };
-        const json = await res.json();
-        const rows = Array.isArray(json.data) ? json.data : [];
-
-        rows.forEach((m) => {
-          const manageNo = String(m.HOUSE_MANAGE_NO || '');
-          const rawAmt = String(m.LTTOT_TOP_AMOUNT || '').replace(/[^0-9]/g, '');
-          const amtMan = Number(rawAmt);
-          if (!manageNo || !amtMan || amtMan <= 0) return;
-
-          const modelType = m.HOUSE_TY || '';
-          const existing = priceMap.get(manageNo);
-          const is84 = /^0?84/.test(modelType);
-          if (!existing || is84) {
-            priceMap.set(manageNo, amtMan);
-            if (modelType) infoMap.set(manageNo, `${modelType}㎡ 기준`);
-          }
-        });
-      } catch (e) {}
-      return { priceMap, infoMap };
-    }
-
-    async function fetchFirstComeSites() {
-      const detailUrl = `${API_DETAIL_ENDPOINT}?page=1&perPage=500&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`;
-      const [detailRes, modelData] = await Promise.all([
-        fetch(detailUrl),
-        fetchModelPriceMap()
-      ]);
-
-      if (!detailRes.ok) throw new Error('API 응답 오류');
-      const json = await detailRes.json();
-      const rows = Array.isArray(json.data) ? json.data : [];
-      const todayStr = getTodayYYYYMMDD();
-
-      const filtered = rows.filter((row) => {
-        const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
-        return contractEnd && contractEnd.length === 8 && contractEnd < todayStr;
-      });
-
-      const apiMapped = filtered.map((row, idx) => {
-        const manageNo = String(row.HOUSE_MANAGE_NO || '');
-        const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
-        const rawAddress = row.HSSPLY_ADRES || '';
-        const areaName = row.SUBSCRPT_AREA_CODE_NM || '';
-        const supplyCnt = row.TOT_SUPLY_HSHLDCO ? `총 ${row.TOT_SUPLY_HSHLDCO}세대` : '';
-        const contractEndRaw = row.CNTRCT_CNCLS_ENDDE ? `정당계약종료 ${row.CNTRCT_CNCLS_ENDDE}` : '';
-        const moveIn = row.MVN_PREARNGE_YM ? `입주예정 ${row.MVN_PREARNGE_YM}` : '';
-        // 현장 대표번호(MDHS_TELNO) 제외
-        const extra = [supplyCnt, contractEndRaw, moveIn].filter(Boolean).join(' · ');
-
-        const realPriceMan = modelData.priceMap.get(manageNo);
-        const typeLabel = modelData.infoMap.get(manageNo);
-        const marketText = buildMarketSummary(rawAddress, areaName);
-
-        return {
-          name,
-          rawAddress,
-          areaName,
-          status: STATUS_TEXT,
-          defaultPriceMan: realPriceMan || 55000,
-          desc:
-            `• 공급위치: ${rawAddress || areaName}\n` +
-            `• 분양정보: ${extra || '정당계약일 경과 · 잔여세대 상담 진행 중'}` +
-            (typeLabel ? ` (${typeLabel} 최고가)` : '') + '\n' +
-            marketText
-        };
-      });
-
-      const existingNames = new Set(apiMapped.map((s) => s.name.replace(/\s+/g, '')));
-      VERIFIED_EXTRA_SITES.forEach((extraSite) => {
-        const norm = extraSite.name.replace(/\s+/g, '');
-        if (!existingNames.has(norm)) {
-          apiMapped.unshift(extraSite);
-        }
-      });
-
-      return apiMapped;
-    }
-
-    function resolveAccurateCoords(geocoder, places, site) {
-      return new Promise((resolve) => {
-        const cleaned = cleanSupplyAddress(site.rawAddress);
-        const tokens = cleaned.split(' ');
-        const sigunguPrefix = tokens.slice(0, 2).join(' ');
-
-        const tryKeywordFallback = () => {
-          const kw = `${sigunguPrefix} ${site.name}`.trim();
-          if (!kw) return resolve(null);
-          places.keywordSearch(kw, function (data, status) {
-            if (status === kakao.maps.services.Status.OK && data && data[0]) {
-              resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
-            } else {
-              places.keywordSearch(site.name, function (data2, status2) {
-                if (status2 === kakao.maps.services.Status.OK && data2 && data2[0]) {
-                  resolve({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
-                } else {
-                  resolve(null);
-                }
-              });
-            }
-          });
-        };
-
-        const primaryKw = `${sigunguPrefix} ${site.name}`.trim();
-        places.keywordSearch(primaryKw, function (pData, pStatus) {
-          if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
-            return resolve({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
-          }
-
-          if (!cleaned) return tryKeywordFallback();
-
-          geocoder.addressSearch(cleaned, function (result, status) {
-            if (status === kakao.maps.services.Status.OK && result && result[0]) {
-              resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
-            } else {
-              tryKeywordFallback();
-            }
-          });
-        });
-      });
-    }
-
-    kakao.maps.load(async function () {
-      const mapEl = document.getElementById('map');
-      const map = new kakao.maps.Map(mapEl, {
-        center: new kakao.maps.LatLng(35.1796, 129.0756),
-        level: 8
-      });
-      const geocoder = new kakao.maps.services.Geocoder();
-      const places = new kakao.maps.services.Places();
-      const toast = document.getElementById('status-toast');
-      const panel = document.getElementById('detail-panel');
-      const drawer = document.getElementById('district-drawer');
-      const districtGrid = document.getElementById('district-grid');
-
-      let activeRegionKey = 'busan';
-      let isDrawerOpen = false;
-
-      function renderDistricts(regionKey) {
-        const reg = REGION_DATA[regionKey];
-        if (!reg) return;
-        districtGrid.innerHTML = '';
-        reg.districts.forEach((d) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'district-btn';
-          btn.textContent = d.name;
-          btn.onclick = function () {
-            document.querySelectorAll('.district-btn').forEach((b) => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            map.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
-            map.setLevel(d.level);
-            drawer.style.display = 'none';
-            isDrawerOpen = false;
-          };
-          districtGrid.appendChild(btn);
-        });
-      }
-
-      renderDistricts('busan');
-
-      document.querySelectorAll('.region-tab').forEach((tab) => {
-        tab.onclick = function () {
-          const key = tab.getAttribute('data-region');
-          const wasSame = (activeRegionKey === key);
-
-          document.querySelectorAll('.region-tab').forEach((t) => t.classList.remove('active'));
-          tab.classList.add('active');
-          activeRegionKey = key;
-
-          renderDistricts(key);
-
-          if (wasSame && isDrawerOpen) {
-            drawer.style.display = 'none';
-            isDrawerOpen = false;
-          } else {
-            drawer.style.display = 'block';
-            isDrawerOpen = true;
-          }
-
-          const reg = REGION_DATA[key];
-          if (reg && reg.center) {
-            map.setCenter(new kakao.maps.LatLng(reg.center.lat, reg.center.lng));
-            map.setLevel(reg.center.level);
-          }
-        };
-      });
-
-      document.getElementById('close-btn').onclick = function () {
-        panel.style.display = 'none';
-      };
-
-      const btn5 = document.getElementById('rate-5');
-      const btn10 = document.getElementById('rate-10');
-      const priceInput = document.getElementById('total-price-input');
-
-      btn5.onclick = function () {
-        currentRate = 0.05;
-        btn5.classList.add('active');
-        btn10.classList.remove('active');
-        updateCalc();
-      };
-      btn10.onclick = function () {
-        currentRate = 0.10;
-        btn10.classList.add('active');
-        btn5.classList.remove('active');
-        updateCalc();
-      };
-      priceInput.oninput = updateCalc;
-
-      let apiSites = [];
-      try {
-        apiSites = await fetchFirstComeSites();
-      } catch (e) {
-        apiSites = [...VERIFIED_EXTRA_SITES];
-      }
-
-      const renderedItems = [];
-
-      for (let idx = 0; idx < apiSites.length; idx++) {
-        const site = apiSites[idx];
-        const coords = await resolveAccurateCoords(geocoder, places, site);
-        if (!coords) continue;
-
-        const pos = new kakao.maps.LatLng(coords.lat, coords.lng);
-        const marker = new kakao.maps.Marker({ map: map, position: pos });
-        const viewers = getDynamicViewers(site, idx);
-
-        const badge = document.createElement('div');
-        badge.className = 'pin-badge';
-        badge.textContent = `${site.name} · ${viewers}명 보는중`;
-
-        const openPanel = function () {
-          const curViewers = getDynamicViewers(site, idx);
-          badge.textContent = `${site.name} · ${curViewers}명 보는중`;
-          document.getElementById('site-title').textContent = site.name;
-          document.getElementById('site-status').textContent = site.status;
-          document.getElementById('site-viewers').textContent = `현재 ${curViewers}명 보는중`;
-          document.getElementById('site-desc').textContent = site.desc;
-          priceInput.value = site.defaultPriceMan;
-          updateCalc();
-          panel.style.display = 'block';
-        };
-
-        badge.onclick = openPanel;
-        kakao.maps.event.addListener(marker, 'click', openPanel);
-
-        const overlay = new kakao.maps.CustomOverlay({
-          map: map,
-          position: pos,
-          content: badge,
-          yAnchor: 2.35
-        });
-
-        renderedItems.push({ site, idx, marker, overlay, badge, pos });
-      }
-
-      toast.textContent = `분양현장 ${renderedItems.length}곳 표시 중`;
-      setTimeout(() => { toast.style.display = 'none'; }, 3500);
-
-      setInterval(function () {
-        renderedItems.forEach(function (item) {
-          const v = getDynamicViewers(item.site, item.idx);
-          item.badge.textContent = `${item.site.name} · ${v}명 보는중`;
-        });
-      }, 60 * 1000);
-
-      const searchInput = document.getElementById('search-input');
-      const runSearch = function () {
-        const q = searchInput.value.trim().toLowerCase();
-        if (!q) {
-          renderedItems.forEach((item) => {
-            item.marker.setMap(map);
-            item.overlay.setMap(map);
-          });
-          map.setCenter(new kakao.maps.LatLng(35.1796, 129.0756));
-          map.setLevel(8);
-          return;
-        }
-
-        const matched = [];
-        renderedItems.forEach((item) => {
-          const hay = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''}`.toLowerCase();
-          if (hay.includes(q)) {
-            item.marker.setMap(map);
-            item.overlay.setMap(map);
-            matched.push(item);
-          } else {
-            item.marker.setMap(null);
-            item.overlay.setMap(null);
-          }
-        });
-
-        if (matched.length > 0) {
-          map.setCenter(matched[0].pos);
-          map.setLevel(matched.length === 1 ? 5 : 8);
-        } else {
-          toast.style.display = 'block';
-          toast.textContent = `'${searchInput.value.trim()}' 검색 결과가 없습니다.`;
-          setTimeout(() => { toast.style.display = 'none'; }, 2500);
-        }
-      };
-
-      document.getElementById('search-btn').onclick = runSearch;
-      searchInput.onkeydown = function (e) {
-        if (e.key === 'Enter') runSearch();
-      };
-      document.getElementById('reset-btn').onclick = function () {
-        searchInput.value = '';
-        drawer.style.display = 'none';
-        isDrawerOpen = false;
-        runSearch();
-      };
-    });
-  </script>
-</body>
-</html>
+      return [
+        '주변 시세: 해당 권역 신축
