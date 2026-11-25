@@ -314,10 +314,22 @@
       line-height: 1.6;
       color: #222;
     }
+    .privacy-note {
+      margin: 12px 0 8px 0;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #4b5563;
+      text-align: center;
+      word-break: keep-all;
+    }
     .consult-btn {
       display: block;
       text-align: center;
-      margin-top: 12px;
+      margin-top: 0;
       padding: 11px 14px;
       background: #fee500;
       color: #191919;
@@ -390,6 +402,9 @@
       <div id="calc-result" class="calc-result"></div>
     </div>
 
+    <div class="privacy-note">
+      상담 요청 시 분양 안내 및 상담을 위한<br>개인정보 수집·이용에 동의한 것으로 간주합니다.
+    </div>
     <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX/chat" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
   </div>
 
@@ -970,7 +985,6 @@
         }
       });
 
-      // 부산/경남 권역 우선 정렬로 체감 로딩 속도 향상
       apiMapped.sort((a, b) => {
         const aBusan = (`${a.areaName} ${a.rawAddress}`).includes('부산') ? 0 : 1;
         const bBusan = (`${b.areaName} ${b.rawAddress}`).includes('부산') ? 0 : 1;
@@ -1327,7 +1341,6 @@
         apiSites = [...VERIFIED_EXTRA_SITES];
       }
 
-      // 1차: 캐시된 좌표 및 고정 현장을 먼저 즉시 지도에 표시
       const remainingSites = [];
       apiSites.forEach((site, idx) => {
         const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
@@ -1341,7 +1354,6 @@
         }
       });
 
-      // 2차: 미캐시 현장은 40개씩 묶어 순차 조회 및 표시
       const BATCH_SIZE = 40;
       for (let i = 0; i < remainingSites.length; i += BATCH_SIZE) {
         const chunk = remainingSites.slice(i, i + BATCH_SIZE);
