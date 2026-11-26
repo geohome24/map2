@@ -56,27 +56,27 @@
       background: #e5e9f0;
       color: #1d4ed8;
     }
-    .region-tab .arrow {
-      font-size: 9px;
-    }
-    #district-drawer {
-      display: none;
+    #district-bar {
+      display: flex;
+      align-items: center;
+      gap: 5px;
       padding: 6px 8px;
       background: #f9fafb;
       border-bottom: 1px solid #e5e7eb;
-      max-height: 120px;
-      overflow-y: auto;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
-    .district-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+    #district-bar::-webkit-scrollbar {
+      display: none;
     }
     .district-btn {
-      padding: 4px 8px;
+      flex: 0 0 auto;
+      padding: 4px 9px;
       border: 1px solid #d1d5db;
       background: #ffffff;
-      border-radius: 5px;
+      border-radius: 999px;
       font-size: 11.5px;
       font-weight: 600;
       color: #1f2937;
@@ -178,7 +178,7 @@
     }
     #status-toast {
       position: fixed;
-      top: 78px;
+      top: 112px;
       left: 8px;
       z-index: 34;
       background: rgba(17, 24, 39, 0.85);
@@ -326,14 +326,30 @@
       text-align: center;
       word-break: keep-all;
     }
+    .btn-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
     .consult-btn {
       display: block;
       text-align: center;
-      margin-top: 0;
       padding: 11px 14px;
       background: #fee500;
       color: #191919;
       font-size: 13.5px;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+    .channel-add-btn {
+      display: block;
+      text-align: center;
+      padding: 9px 14px;
+      background: #f3f4f6;
+      color: #111827;
+      border: 1px solid #d1d5db;
+      font-size: 12.5px;
       font-weight: 700;
       text-decoration: none;
       border-radius: 8px;
@@ -362,15 +378,13 @@
 <body>
   <div id="top-nav-wrap">
     <div class="region-tabs" id="region-tabs">
-      <button type="button" class="region-tab active" data-region="busan">부산 <span class="arrow">▼</span></button>
-      <button type="button" class="region-tab" data-region="ulgyeong">울산·경남 <span class="arrow">▼</span></button>
-      <button type="button" class="region-tab" data-region="daegyeong">대구·경북 <span class="arrow">▼</span></button>
-      <button type="button" class="region-tab" data-region="capital">서울·수도권 <span class="arrow">▼</span></button>
+      <button type="button" class="region-tab active" data-region="busan">부산</button>
+      <button type="button" class="region-tab" data-region="ulgyeong">울산·경남</button>
+      <button type="button" class="region-tab" data-region="daegyeong">대구·경북</button>
+      <button type="button" class="region-tab" data-region="capital">서울·수도권</button>
       <button type="button" class="region-tab" data-region="etc">충청·전라·강원</button>
     </div>
-    <div id="district-drawer">
-      <div class="district-grid" id="district-grid"></div>
-    </div>
+    <div id="district-bar"></div>
     <div class="search-row">
       <input id="search-input" type="text" placeholder="현장명·줄임말·구 검색" autocomplete="off" />
       <button id="search-btn" type="button">검색</button>
@@ -378,7 +392,7 @@
       <div id="search-dropdown"></div>
     </div>
   </div>
-  <div id="status-toast">정당계약일 이후 분양현장 불러오는 중...</div>
+  <div id="status-toast">분양현장 불러오는 중...</div>
 
   <div id="map"></div>
 
@@ -405,7 +419,10 @@
     <div class="privacy-note">
       상담 요청 시 분양 안내 및 상담을 위한<br>개인정보 수집·이용에 동의한 것으로 간주합니다.
     </div>
-    <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX/chat" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
+    <div class="btn-stack">
+      <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX/chat" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담</a>
+      <a class="channel-add-btn" href="http://pf.kakao.com/_FsXvX" target="_blank" rel="noopener noreferrer">+ 지오홈 카카오톡 채널 추가</a>
+    </div>
   </div>
 
   <div id="bottom-footer">
@@ -417,7 +434,9 @@
     const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
     const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
-    const COORD_CACHE_KEY = 'geohome_coord_cache_v1';
+    const COORD_CACHE_KEY = 'geohome_coord_cache_v2';
+
+    const INITIAL_CENTER = { lat: 35.1628, lng: 129.0531, level: 6 };
 
     const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
     const STATUS_NORMAL_COLOR = '#0066cc';
@@ -436,6 +455,7 @@
       ['아이파크', 'hdc'],
       ['e편한세상', '이편한세상', 'dl'],
       ['에코델타', '에코델타시티', '강서구'],
+      ['아테라', '금호건설'],
       ['리버시티', '에듀리버']
     ];
 
@@ -623,6 +643,23 @@
 
     const VERIFIED_EXTRA_SITES = [
       {
+        name: '에코델타시티 아테라',
+        aliases: '에코델타 아테라 에코델타시티아테라 금호',
+        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+        areaName: '부산',
+        fallbackLat: 35.1764,
+        fallbackLng: 128.9478,
+        status: STATUS_NORMAL_TEXT,
+        statusColor: STATUS_NORMAL_COLOR,
+        defaultPriceMan: 54800,
+        infoLines: [
+          '공급위치: 부산광역시 강서구 에코델타시티',
+          '분양정보: 입주예정 2028-05 · 잔여세대 상담 진행 중',
+          '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
+          '주변 생활: 에코델타시티 학군 및 수변공원·상업지구 인접'
+        ]
+      },
+      {
         name: '에코델타시티 중흥S-클래스 리버시티',
         aliases: '에코델타 중흥 리버시티 에코델타중흥',
         rawAddress: '부산광역시 강서구 강동동 에코델타시티',
@@ -678,24 +715,23 @@
     const REGION_DATA = {
       busan: {
         label: '부산',
-        center: { lat: 35.1796, lng: 129.0756, level: 8 },
+        center: { lat: 35.1628, lng: 129.0531, level: 6 },
         districts: [
-          { name: '부산 전체', lat: 35.1796, lng: 129.0756, level: 8 },
-          { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
-          { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
-          { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
-          { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
           { name: '부산진구', lat: 35.1628, lng: 129.0531, level: 5 },
+          { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
           { name: '동래구', lat: 35.2048, lng: 129.0836, level: 5 },
           { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
-          { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
+          { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
           { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
+          { name: '강서구', lat: 35.1764, lng: 128.9478, level: 6 },
+          { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
+          { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
           { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
           { name: '금정구', lat: 35.2430, lng: 129.0921, level: 5 },
-          { name: '강서구', lat: 35.2122, lng: 128.9806, level: 6 },
-          { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
-          { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
-          { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
+          { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
+          { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
+          { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
+          { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
           { name: '기장군', lat: 35.2446, lng: 129.2223, level: 6 }
         ]
       },
@@ -843,6 +879,21 @@
       return formatDateObjYYYYMMDD(dt);
     }
 
+    function getSixMonthsAgoYYYYMM() {
+      const dt = new Date();
+      dt.setMonth(dt.getMonth() - 6);
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      return `${y}${m}`;
+    }
+
+    function isMovedInMoreThanSixMonthsAgo(moveInVal) {
+      const digits = String(moveInVal || '').replace(/[^0-9]/g, '');
+      if (digits.length < 6) return false;
+      const ym = digits.slice(0, 6);
+      return ym < getSixMonthsAgoYYYYMM();
+    }
+
     function normalizeDateDigits(val) {
       if (!val) return '';
       return String(val).replace(/[^0-9]/g, '').slice(0, 8);
@@ -925,6 +976,9 @@
       const twoYearsAgoStr = getTwoYearsAgoYYYYMMDD();
 
       const filtered = allRows.filter((row) => {
+        if (isMovedInMoreThanSixMonthsAgo(row.MVN_PREARNGE_YM)) {
+          return false;
+        }
         const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
         if (!contractEnd || contractEnd.length !== 8 || contractEnd >= todayStr) {
           return false;
@@ -965,11 +1019,15 @@
           ...marketLines
         ];
 
+        const isAtera = normalizeSearchKey(name).includes('에코델타') && normalizeSearchKey(name).includes('아테라');
+
         return {
           name,
-          aliases: '',
+          aliases: isAtera ? '에코델타 아테라 에코델타시티아테라' : '',
           rawAddress,
           areaName,
+          fallbackLat: isAtera ? 35.1764 : undefined,
+          fallbackLng: isAtera ? 128.9478 : undefined,
           status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
           statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
           defaultPriceMan: realPriceMan || 55000,
@@ -1069,64 +1127,50 @@
     kakao.maps.load(async function () {
       const mapEl = document.getElementById('map');
       const map = new kakao.maps.Map(mapEl, {
-        center: new kakao.maps.LatLng(35.1796, 129.0756),
-        level: 8
+        center: new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng),
+        level: INITIAL_CENTER.level
       });
       const geocoder = new kakao.maps.services.Geocoder();
       const places = new kakao.maps.services.Places();
       const toast = document.getElementById('status-toast');
       const panel = document.getElementById('detail-panel');
-      const drawer = document.getElementById('district-drawer');
-      const districtGrid = document.getElementById('district-grid');
+      const districtBar = document.getElementById('district-bar');
       const dropdown = document.getElementById('search-dropdown');
       const searchInput = document.getElementById('search-input');
 
       let activeRegionKey = 'busan';
-      let isDrawerOpen = false;
       let isSitesLoaded = false;
       let pendingSearchAfterLoad = false;
 
-      function renderDistricts(regionKey) {
+      function renderDistrictBar(regionKey, selectFirst) {
         const reg = REGION_DATA[regionKey];
         if (!reg) return;
-        districtGrid.innerHTML = '';
-        reg.districts.forEach((d) => {
+        districtBar.innerHTML = '';
+        reg.districts.forEach((d, idx) => {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'district-btn';
+          btn.className = 'district-btn' + (selectFirst && idx === 0 ? ' selected' : '');
           btn.textContent = d.name;
           btn.onclick = function () {
             document.querySelectorAll('.district-btn').forEach((b) => b.classList.remove('selected'));
             btn.classList.add('selected');
             map.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
             map.setLevel(d.level);
-            drawer.style.display = 'none';
-            isDrawerOpen = false;
           };
-          districtGrid.appendChild(btn);
+          districtBar.appendChild(btn);
         });
       }
 
-      renderDistricts('busan');
+      renderDistrictBar('busan', true);
 
       document.querySelectorAll('.region-tab').forEach((tab) => {
         tab.onclick = function () {
           const key = tab.getAttribute('data-region');
-          const wasSame = (activeRegionKey === key);
-
           document.querySelectorAll('.region-tab').forEach((t) => t.classList.remove('active'));
           tab.classList.add('active');
           activeRegionKey = key;
 
-          renderDistricts(key);
-
-          if (wasSame && isDrawerOpen) {
-            drawer.style.display = 'none';
-            isDrawerOpen = false;
-          } else {
-            drawer.style.display = 'block';
-            isDrawerOpen = true;
-          }
+          renderDistrictBar(key, true);
 
           const reg = REGION_DATA[key];
           if (reg && reg.center) {
@@ -1247,8 +1291,8 @@
             item.marker.setMap(map);
             item.overlay.setMap(map);
           });
-          map.setCenter(new kakao.maps.LatLng(35.1796, 129.0756));
-          map.setLevel(8);
+          map.setCenter(new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng));
+          map.setLevel(INITIAL_CENTER.level);
           return;
         }
 
@@ -1291,8 +1335,6 @@
       };
       document.getElementById('reset-btn').onclick = function () {
         searchInput.value = '';
-        drawer.style.display = 'none';
-        isDrawerOpen = false;
         runSearch();
       };
 
