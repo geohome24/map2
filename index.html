@@ -315,16 +315,31 @@
       color: #222;
     }
     .privacy-note {
-      margin: 12px 0 8px 0;
-      padding: 8px 10px;
+      margin: 12px 0 10px 0;
+      padding: 12px 14px;
       background: #f8fafc;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      font-size: 11px;
-      line-height: 1.5;
-      color: #4b5563;
-      text-align: center;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: #475569;
+      text-align: left;
       word-break: keep-all;
+      box-sizing: border-box;
+    }
+    .privacy-check-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+    .privacy-detail-list {
+      padding-left: 20px;
+      font-size: 11.5px;
+      color: #64748b;
     }
     .consult-btn {
       display: block;
@@ -400,17 +415,17 @@
     </div>
 
     <div class="privacy-note">
-      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; font-size:12px; color:#475569; text-align:left; line-height:1.55; margin-bottom:10px;">
-  <label style="display:flex; align-items:center; gap:6px; font-weight:700; color:#1e293b; margin-bottom:6px; cursor:pointer;">
-    <input type="checkbox" id="privacy-agree-check" checked style="width:14px; height:14px; accent-color:#2563eb; cursor:pointer;">
-    <span>개인정보 수집·이용 동의 (필수)</span>
-  </label>
-  <div style="padding-left:20px; font-size:11.5px; color:#64748b;">
-    <div>· <strong>수집 항목:</strong> 이름, 연락처, 관심 현장 및 문의 내용</div>
-    <div>· <strong>이용 목적:</strong> 분양 정보 안내 및 맞춤형 상담 진행</div>
-    <div>· <strong>보유 기간:</strong> 상담 완료 후 1년 (동의 철회 시 즉시 파기)</div>
-  </div>
-</div>
+      <label class="privacy-check-label" for="privacy-agree-check">
+        <input type="checkbox" id="privacy-agree-check" checked style="width:14px; height:14px; accent-color:#2563eb; cursor:pointer;" />
+        <span>개인정보 수집·이용 동의 (필수)</span>
+      </label>
+      <div class="privacy-detail-list">
+        <div>· <strong>수집 항목:</strong> 이름, 연락처, 관심 현장 및 문의 내용</div>
+        <div>· <strong>이용 목적:</strong> 분양 정보 안내 및 맞춤형 상담 진행</div>
+        <div>· <strong>보유 기간:</strong> 상담 완료 후 1년 (동의 철회 시 즉시 파기)</div>
+      </div>
+    </div>
+
     <a id="kakao-link" class="consult-btn" href="http://pf.kakao.com/_FsXvX" target="_blank" rel="noopener noreferrer">카카오톡 채널 상담·추가</a>
   </div>
 
@@ -424,6 +439,7 @@
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
     const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
     const COORD_CACHE_KEY = 'geohome_coord_cache_v3';
+    const PRIVACY_ALERT_MSG = '개인정보 수집·이용에 동의(체크)하셔야 상담 진행이 가능합니다.';
 
     const INITIAL_CENTER = { lat: 35.1628, lng: 129.0531, level: 6 };
 
@@ -465,6 +481,28 @@
         localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(coordCache));
       } catch (e) {}
     }
+
+    function isPrivacyAgreed() {
+      const cb = document.getElementById('privacy-agree-check');
+      return !cb || cb.checked;
+    }
+
+    function requirePrivacyAgreement(e) {
+      const cb = document.getElementById('privacy-agree-check');
+      if (cb && !cb.checked) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        alert(PRIVACY_ALERT_MSG);
+        cb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cb.focus();
+        return false;
+      }
+      return true;
+    }
+
+    window.checkPrivacyAgreed = isPrivacyAgreed;
 
     function sendLeadToSheet(payload) {
       if (!LEAD_WEBHOOK_URL) return;
@@ -1123,22 +1161,22 @@
       const places = new kakao.maps.services.Places();
       const toast = document.getElementById('status-toast');
       // 좌표 확인용: 지도 클릭 시 위도·경도 표시 및 복사
-kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
-  const latlng = mouseEvent.latLng;
-  const lat = Number(latlng.getLat()).toFixed(6);
-  const lng = Number(latlng.getLng()).toFixed(6);
-  const coordText = `${lat}, ${lng}`;
+      kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
+        const latlng = mouseEvent.latLng;
+        const lat = Number(latlng.getLat()).toFixed(6);
+        const lng = Number(latlng.getLng()).toFixed(6);
+        const coordText = `${lat}, ${lng}`;
 
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(coordText).catch(function () {});
-  }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(coordText).catch(function () {});
+        }
 
-  toast.style.display = 'block';
-  toast.textContent = `좌표 복사됨: ${coordText}`;
-  setTimeout(function () {
-    toast.style.display = 'none';
-  }, 3000);
-});
+        toast.style.display = 'block';
+        toast.textContent = `좌표 복사됨: ${coordText}`;
+        setTimeout(function () {
+          toast.style.display = 'none';
+        }, 3000);
+      });
       const panel = document.getElementById('detail-panel');
       const districtBar = document.getElementById('district-bar');
       const dropdown = document.getElementById('search-dropdown');
@@ -1209,7 +1247,10 @@ kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
       };
       priceInput.oninput = updateCalc;
 
-      kakaoBtn.onclick = function () {
+      kakaoBtn.onclick = function (e) {
+        if (!requirePrivacyAgreement(e)) {
+          return false;
+        }
         const site = activeSiteForConsult || {};
         const summary = getCalcSummaryText();
         sendLeadToSheet({
@@ -1223,6 +1264,20 @@ kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
           conditions: `${summary} / 위치: ${site.rawAddress || site.areaName || '-'}`
         });
       };
+
+      document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', requirePrivacyAgreement, true);
+      });
+
+      document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, [role="button"]').forEach(function (el) {
+        if (el.id === 'kakao-link' || el.id === 'rate-5' || el.id === 'rate-10' || el.id === 'search-btn' || el.id === 'reset-btn' || el.id === 'close-btn') {
+          return;
+        }
+        const text = (el.textContent || el.value || '').trim();
+        if (/상담|전송|신청|문의|제출|접수/.test(text)) {
+          el.addEventListener('click', requirePrivacyAgreement, true);
+        }
+      });
 
       function hideDropdown() {
         dropdown.style.display = 'none';
