@@ -1113,6 +1113,23 @@
       const geocoder = new kakao.maps.services.Geocoder();
       const places = new kakao.maps.services.Places();
       const toast = document.getElementById('status-toast');
+      // 좌표 확인용: 지도 클릭 시 위도·경도 표시 및 복사
+kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
+  const latlng = mouseEvent.latLng;
+  const lat = Number(latlng.getLat()).toFixed(6);
+  const lng = Number(latlng.getLng()).toFixed(6);
+  const coordText = `${lat}, ${lng}`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(coordText).catch(function () {});
+  }
+
+  toast.style.display = 'block';
+  toast.textContent = `좌표 복사됨: ${coordText}`;
+  setTimeout(function () {
+    toast.style.display = 'none';
+  }, 3000);
+});
       const panel = document.getElementById('detail-panel');
       const districtBar = document.getElementById('district-bar');
       const dropdown = document.getElementById('search-dropdown');
