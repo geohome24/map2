@@ -434,7 +434,7 @@
     const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
     const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
     const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
-    const COORD_CACHE_KEY = 'geohome_coord_cache_v2';
+    const COORD_CACHE_KEY = 'geohome_coord_cache_v3';
 
     const INITIAL_CENTER = { lat: 35.1628, lng: 129.0531, level: 6 };
 
@@ -645,18 +645,18 @@
       {
         name: '에코델타시티 아테라',
         aliases: '에코델타 아테라 에코델타시티아테라 금호',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+        rawAddress: '부산광역시 강서구 강동동 에코델타시티 24BL',
         areaName: '부산',
-        fallbackLat: 35.1764,
-        fallbackLng: 128.9478,
+        fallbackLat: 35.1779,
+        fallbackLng: 128.9472,
         status: STATUS_NORMAL_TEXT,
         statusColor: STATUS_NORMAL_COLOR,
         defaultPriceMan: 54800,
         infoLines: [
-          '공급위치: 부산광역시 강서구 에코델타시티',
-          '분양정보: 입주예정 2028-05 · 잔여세대 상담 진행 중',
+          '공급위치: 부산광역시 강서구 에코델타시티 24BL (강서초등학교 북측)',
+          '분양정보: 입주예정 2028-03 · 잔여세대 상담 진행 중',
           '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
-          '주변 생활: 에코델타시티 학군 및 수변공원·상업지구 인접'
+          '주변 생활: 강서초등학교 바로 인접 및 수변공원·중심상업지구 생활권'
         ]
       },
       {
@@ -723,7 +723,7 @@
           { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
           { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
           { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
-          { name: '강서구', lat: 35.1764, lng: 128.9478, level: 6 },
+          { name: '강서구', lat: 35.1779, lng: 128.9472, level: 6 },
           { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
           { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
           { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
@@ -1026,8 +1026,8 @@
           aliases: isAtera ? '에코델타 아테라 에코델타시티아테라' : '',
           rawAddress,
           areaName,
-          fallbackLat: isAtera ? 35.1764 : undefined,
-          fallbackLng: isAtera ? 128.9478 : undefined,
+          fallbackLat: isAtera ? 35.1779 : undefined,
+          fallbackLng: isAtera ? 128.9472 : undefined,
           status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
           statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
           defaultPriceMan: realPriceMan || 55000,
