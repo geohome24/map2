@@ -678,6 +678,7 @@
         fallbackLng: 128.919472,
         status: STATUS_NORMAL_TEXT,
         statusColor: STATUS_NORMAL_COLOR,
+        recencyBonus: 12,
         defaultPriceMan: 54800,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티 24BL (강서초등학교 북측)',
@@ -695,6 +696,7 @@
         fallbackLng: 128.9385,
         status: STATUS_NORMAL_TEXT,
         statusColor: STATUS_NORMAL_COLOR,
+        recencyBonus: 12,
         defaultPriceMan: 56200,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -712,6 +714,7 @@
         fallbackLng: 128.9420,
         status: STATUS_NORMAL_TEXT,
         statusColor: STATUS_NORMAL_COLOR,
+        recencyBonus: 12,
         defaultPriceMan: 56800,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -729,6 +732,7 @@
         fallbackLng: 128.9445,
         status: STATUS_NORMAL_TEXT,
         statusColor: STATUS_NORMAL_COLOR,
+        recencyBonus: 12,
         defaultPriceMan: 55400,
         infoLines: [
           '공급위치: 부산광역시 강서구 에코델타시티',
@@ -836,7 +840,7 @@
       return Math.floor(Date.now() / (30 * 60 * 1000));
     }
 
-    // 시간대별 자연스러운 관심·조회 인원 계산 (추후 실제 GA4/DB 수치로 교체 가능)
+    // 시간대별 + 최근 현장 가중치 반영 관심·조회 인원 계산 (추후 실제 GA4/DB 수치로 교체 가능)
     function getDynamicViewers(site, idx) {
       const now = new Date();
       const hour = now.getHours();
@@ -855,7 +859,7 @@
         minVal = 15;
         maxVal = 26;
       } else if ((hour >= 10 && hour < 12) || (hour >= 14 && hour < 17) || (hour >= 20 && hour < 22)) {
-        // 오전·오후·저녁 피크 시간대 (32~52명)
+        // 피크 시간대 (32~52명)
         minVal = 32;
         maxVal = 52;
       } else if (hour >= 23) {
@@ -863,7 +867,7 @@
         minVal = 13;
         maxVal = 21;
       } else {
-        // 일반 주간·저녁 시간대 (22~36명)
+        // 일반 시간대 (22~36명)
         minVal = 22;
         maxVal = 36;
       }
@@ -875,6 +879,9 @@
 
       if (val < minVal) val = minVal + ((seed + slot) % 3);
       if (val > maxVal) val = maxVal - ((seed + slot) % 3);
+
+      const bonus = Number(site.recencyBonus || 0);
+      val = Math.max(5, Math.min(68, val + bonus));
       return val;
     }
 
@@ -1061,6 +1068,9 @@
         const contractEndHyphen = formatHyphenDate(row.CNTRCT_CNCLS_ENDDE);
         const moveInHyphen = formatHyphenDate(row.MVN_PREARNGE_YM);
 
+        // 최근 분양 현장(+12) 가중치 적용, 오래된 현장(-6) 차등 반영
+        const recencyBonus = isOlderThanTwoYears ? -6 : 12;
+
         const infoParts = [];
         if (supplyCnt) infoParts.push(supplyCnt);
         if (contractEndHyphen) infoParts.push(`정당계약종료 ${contractEndHyphen}`);
@@ -1088,6 +1098,7 @@
           fallbackLng: isAtera ? 128.919472 : undefined,
           status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
           statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
+          recencyBonus,
           defaultPriceMan: realPriceMan || 55000,
           infoLines: lines
         };
