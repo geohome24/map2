@@ -836,14 +836,45 @@
       return Math.floor(Date.now() / (30 * 60 * 1000));
     }
 
+    // 시간대별 자연스러운 관심·조회 인원 계산 (추후 실제 GA4/DB 수치로 교체 가능)
     function getDynamicViewers(site, idx) {
+      const now = new Date();
+      const hour = now.getHours();
       const slot = getSlotIndex30Min();
       const seed = site.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-      const base = 20 + ((seed + idx * 7) % 31);
-      const step = ((slot * 3 + idx * 5 + seed) % 7) - 3;
-      const val = base + step;
-      if (val < 20) return 20 + (Math.abs(val) % 5);
-      if (val > 50) return 50 - (val % 5);
+
+      let minVal = 22;
+      let maxVal = 36;
+
+      if (hour >= 0 && hour < 6) {
+        // 자정(00시) ~ 06시: 10여 명 내외 (8~14명)
+        minVal = 8;
+        maxVal = 14;
+      } else if (hour >= 6 && hour < 9) {
+        // 06시 ~ 09시: 점진 증가 (15~26명)
+        minVal = 15;
+        maxVal = 26;
+      } else if ((hour >= 10 && hour < 12) || (hour >= 14 && hour < 17) || (hour >= 20 && hour < 22)) {
+        // 오전·오후·저녁 피크 시간대 (32~52명)
+        minVal = 32;
+        maxVal = 52;
+      } else if (hour >= 23) {
+        // 오후 11시 ~ 자정: 점차 감소 (13~21명)
+        minVal = 13;
+        maxVal = 21;
+      } else {
+        // 일반 주간·저녁 시간대 (22~36명)
+        minVal = 22;
+        maxVal = 36;
+      }
+
+      const range = maxVal - minVal + 1;
+      const base = minVal + ((seed + idx * 7) % range);
+      const step = ((slot * 3 + idx * 5 + seed) % 5) - 2;
+      let val = base + step;
+
+      if (val < minVal) val = minVal + ((seed + slot) % 3);
+      if (val > maxVal) val = maxVal - ((seed + slot) % 3);
       return val;
     }
 
@@ -1160,6 +1191,7 @@
       const geocoder = new kakao.maps.services.Geocoder();
       const places = new kakao.maps.services.Places();
       const toast = document.getElementById('status-toast');
+
       // 좌표 확인용: 지도 클릭 시 위도·경도 표시 및 복사
       kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
         const latlng = mouseEvent.latLng;
@@ -1177,6 +1209,7 @@
           toast.style.display = 'none';
         }, 3000);
       });
+
       const panel = document.getElementById('detail-panel');
       const districtBar = document.getElementById('district-bar');
       const dropdown = document.getElementById('search-dropdown');
@@ -1407,17 +1440,17 @@
 
         const badge = document.createElement('div');
         badge.className = 'pin-badge';
-        badge.textContent = `${site.name} · ${viewers}명 보는중`;
+        badge.textContent = `${site.name} · 최근 ${viewers}명 관심·조회`;
 
         const openPanel = function () {
           activeSiteForConsult = site;
           const curViewers = getDynamicViewers(site, idx);
-          badge.textContent = `${site.name} · ${curViewers}명 보는중`;
+          badge.textContent = `${site.name} · 최근 ${curViewers}명 관심·조회`;
           document.getElementById('site-title').textContent = site.name;
           const statusEl = document.getElementById('site-status');
           statusEl.textContent = site.status;
           statusEl.style.color = site.statusColor || STATUS_NORMAL_COLOR;
-          document.getElementById('site-viewers').textContent = `현재 ${curViewers}명 보는중`;
+          document.getElementById('site-viewers').textContent = `최근 ${curViewers}명 관심·조회`;
           renderInfoLines(site.infoLines);
           priceInput.value = site.defaultPriceMan;
           updateCalc();
@@ -1481,7 +1514,7 @@
       setInterval(function () {
         renderedItems.forEach(function (item) {
           const v = getDynamicViewers(item.site, item.idx);
-          item.badge.textContent = `${item.site.name} · ${v}명 보는중`;
+          item.badge.textContent = `${item.site.name} · 최근 ${v}명 관심·조회`;
         });
       }, 60 * 1000);
     });
