@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>지오홈 분양현장</title>
   <style>
     html, body, #map {
@@ -11,6 +12,12 @@
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      user-select: text;
     }
     #top-nav-wrap {
       position: fixed;
@@ -181,10 +188,10 @@
       top: 112px;
       left: 8px;
       z-index: 34;
-      background: rgba(17, 24, 39, 0.85);
+      background: rgba(17, 24, 39, 0.88);
       color: #fff;
       font-size: 11px;
-      padding: 4px 8px;
+      padding: 5px 9px;
       border-radius: 5px;
     }
     #detail-panel {
@@ -326,6 +333,12 @@
       text-align: left;
       word-break: keep-all;
       box-sizing: border-box;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .privacy-note.error-highlight {
+      border-color: #dc2626;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.16);
+      background: #fef2f2;
     }
     .privacy-check-label {
       display: flex;
@@ -370,10 +383,31 @@
       color: #fee500;
       text-decoration: none;
     }
+    #security-block-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #0f172a;
+      color: #f8fafc;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
   </style>
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=42553244187f3d43b01f98a4468460dc&libraries=services&autoload=false"></script>
 </head>
 <body>
+  <div id="security-block-screen">
+    <div>
+      <strong style="font-size:16px; display:block; margin-bottom:8px;">허가되지 않은 접근 경로입니다.</strong>
+      지오홈 공식 안내 페이지를 통해 접속해 주세요.
+    </div>
+  </div>
+
   <div id="top-nav-wrap">
     <div class="region-tabs" id="region-tabs">
       <button type="button" class="region-tab active" data-region="busan">부산</button>
@@ -384,7 +418,7 @@
     </div>
     <div id="district-bar"></div>
     <div class="search-row">
-      <input id="search-input" type="text" placeholder="현장명·줄임말·구 검색" autocomplete="off" />
+      <input id="search-input" type="text" placeholder="현장명·줄임말·구 검색" autocomplete="off" maxlength="40" />
       <button id="search-btn" type="button">검색</button>
       <button id="reset-btn" type="button">전체</button>
       <div id="search-dropdown"></div>
@@ -404,7 +438,7 @@
     <div class="calc-box">
       <div class="calc-title">총분양대금 확인</div>
       <div class="calc-row">
-        <input id="total-price-input" class="calc-input" type="number" step="100" min="1000" />
+        <input id="total-price-input" class="calc-input" type="number" step="100" min="1000" max="9999999" />
         <span style="font-size: 12px; color: #555;">만원</span>
       </div>
       <div class="calc-row">
@@ -414,7 +448,7 @@
       <div id="calc-result" class="calc-result"></div>
     </div>
 
-    <div class="privacy-note">
+    <div id="privacy-box" class="privacy-note">
       <label class="privacy-check-label" for="privacy-agree-check">
         <input type="checkbox" id="privacy-agree-check" checked style="width:14px; height:14px; accent-color:#2563eb; cursor:pointer;" />
         <span>개인정보 수집·이용 동의 (필수)</span>
@@ -434,1101 +468,1310 @@
   </div>
 
   <script>
-    const API_SERVICE_KEY = '935de5c23598a914dd97149a0b92614db7f4de28d991d658d58dfaca03bad3a7';
-    const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
-    const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
-    const LEAD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj/exec';
-    const COORD_CACHE_KEY = 'geohome_coord_cache_v3';
-    const PRIVACY_ALERT_MSG = '개인정보 수집·이용에 동의(체크)하셔야 상담 진행이 가능합니다.';
+    (function () {
+      'use strict';
 
-    const INITIAL_CENTER = { lat: 35.1628, lng: 129.0531, level: 6 };
+      // =========================================================
+      // 1. 경쟁사 견제 · 무단 접근/크롤링/코드 노출 차단 모듈
+      // =========================================================
+      const ALLOWED_HOST_SUFFIXES = [
+        'pages.dev',
+        'sites.google.com',
+        'googleusercontent.com',
+        'imweb.me',
+        'geohome',
+        'localhost',
+        '127.0.0.1'
+      ];
 
-    const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
-    const STATUS_NORMAL_COLOR = '#0066cc';
-    const STATUS_OLD_LARGE_TEXT = '분양마감 확인 필요';
-    const STATUS_OLD_LARGE_COLOR = '#dc2626';
-
-    const ALIAS_GROUPS = [
-      ['중흥', '중흥s클래스', 's클래스', '에스클래스'],
-      ['푸르지오', '대우'],
-      ['자이', 'gs'],
-      ['더샵', '포스코'],
-      ['포레나', '한화'],
-      ['힐스테이트', '현대'],
-      ['래미안', '삼성'],
-      ['롯데캐슬', '롯데'],
-      ['아이파크', 'hdc'],
-      ['e편한세상', '이편한세상', 'dl'],
-      ['에코델타', '에코델타시티', '강서구'],
-      ['아테라', '금호건설'],
-      ['리버시티', '에듀리버']
-    ];
-
-    let activeSiteForConsult = null;
-    let coordCache = loadCoordCache();
-
-    function loadCoordCache() {
-      try {
-        const raw = localStorage.getItem(COORD_CACHE_KEY);
-        return raw ? JSON.parse(raw) : {};
-      } catch (e) {
-        return {};
+      function isAllowedDomain(hostOrUrl) {
+        if (!hostOrUrl) return false;
+        const clean = String(hostOrUrl).toLowerCase().replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+        return ALLOWED_HOST_SUFFIXES.some((suf) => clean === suf || clean.endsWith('.' + suf) || clean.includes('geohome'));
       }
-    }
 
-    function saveCoordCache() {
-      try {
-        localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(coordCache));
-      } catch (e) {}
-    }
+      function enforceAccessSecurity() {
+        // 자동화 봇/헤드리스 브라우저 차단
+        if (navigator.webdriver === true) {
+          return false;
+        }
+        const currentHost = window.location.hostname || '';
+        const isEmbedded = window.self !== window.top;
 
-    function isPrivacyAgreed() {
-      const cb = document.getElementById('privacy-agree-check');
-      return !cb || cb.checked;
-    }
+        if (isEmbedded) {
+          const ref = document.referrer || '';
+          if (ref && !isAllowedDomain(ref)) {
+            return false;
+          }
+        } else if (currentHost && !isAllowedDomain(currentHost)) {
+          return false;
+        }
+        return true;
+      }
 
-    function requirePrivacyAgreement(e) {
-      const cb = document.getElementById('privacy-agree-check');
-      if (cb && !cb.checked) {
-        if (e) {
+      if (!enforceAccessSecurity()) {
+        const blockEl = document.getElementById('security-block-screen');
+        if (blockEl) blockEl.style.display = 'flex';
+        throw new Error('ACCESS_DENIED');
+      }
+
+      // 우클릭 · 소스보기 · 개발자도구 단축키 방어
+      document.addEventListener('contextmenu', function (e) {
+        if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        const key = (e.key || '').toUpperCase();
+        if (
+          e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && (key === 'I' || key === 'J' || key === 'C')) ||
+          (e.ctrlKey && (key === 'U' || key === 'S')) ||
+          (e.metaKey && e.altKey && (key === 'I' || key === 'J' || key === 'C')) ||
+          (e.metaKey && (key === 'U' || key === 'S'))
+        ) {
           e.preventDefault();
           e.stopPropagation();
+          return false;
         }
-        alert(PRIVACY_ALERT_MSG);
-        cb.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        cb.focus();
-        return false;
-      }
-      return true;
-    }
+      }, true);
 
-    window.checkPrivacyAgreed = isPrivacyAgreed;
-
-    function sendLeadToSheet(payload) {
-      if (!LEAD_WEBHOOK_URL) return;
+      // 콘솔 데이터 덤프 차단
       try {
-        if (navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'text/plain;charset=utf-8' });
-          navigator.sendBeacon(LEAD_WEBHOOK_URL, blob);
-          return;
-        }
+        const noop = function () {};
+        ['log', 'info', 'warn', 'table', 'dir'].forEach(function (m) {
+          if (window.console && typeof window.console[m] === 'function') {
+            window.console[m] = noop;
+          }
+        });
       } catch (e) {}
 
-      fetch(LEAD_WEBHOOK_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        keepalive: true,
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      }).catch(function () {});
-    }
-
-    function normalizeSearchKey(str) {
-      return String(str || '')
-        .toLowerCase()
-        .replace(/[\s\-·.,()\[\]/_]+/g, '');
-    }
-
-    function expandQueryAliases(normToken) {
-      const set = new Set([normToken]);
-      ALIAS_GROUPS.forEach((group) => {
-        if (group.some((alias) => alias.includes(normToken) || normToken.includes(alias))) {
-          group.forEach((alias) => set.add(alias));
+      // 단시간 과다 조회/스크래핑 패턴 제한 (Rate Limiter)
+      const rateTracker = {
+        actions: [],
+        blockedUntil: 0,
+        allow: function (maxPerWindow, windowMs) {
+          const now = Date.now();
+          if (now < this.blockedUntil) return false;
+          this.actions = this.actions.filter((t) => now - t < windowMs);
+          if (this.actions.length >= maxPerWindow) {
+            this.blockedUntil = now + 15000;
+            return false;
+          }
+          this.actions.push(now);
+          return true;
         }
-      });
-      return Array.from(set);
-    }
+      };
 
-    function matchesFlexibleQuery(item, rawQuery) {
-      const trimmed = String(rawQuery || '').trim();
-      if (!trimmed) return true;
-
-      const combinedText = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''} ${item.site.aliases || ''}`;
-      const normHay = normalizeSearchKey(combinedText);
-      const compactQuery = normalizeSearchKey(trimmed);
-
-      if (compactQuery && normHay.includes(compactQuery)) {
-        return true;
-      }
-
-      const tokens = trimmed.split(/\s+/).map(normalizeSearchKey).filter(Boolean);
-      if (tokens.length === 0) return true;
-
-      return tokens.every((tok) => {
-        if (normHay.includes(tok)) return true;
-        const aliases = expandQueryAliases(tok);
-        return aliases.some((al) => normHay.includes(al));
-      });
-    }
-
-    function formatHyphenDate(val) {
-      if (!val) return '';
-      const digits = String(val).replace(/[^0-9]/g, '');
-      if (digits.length >= 8) {
-        return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-      }
-      if (digits.length === 6) {
-        return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
-      }
-      return String(val).trim();
-    }
-
-    function renderInfoLines(lines) {
-      const box = document.getElementById('site-desc');
-      box.innerHTML = '';
-      (lines || []).forEach((text) => {
-        const row = document.createElement('div');
-        row.className = 'info-line';
-
-        const bullet = document.createElement('span');
-        bullet.className = 'info-bullet';
-        bullet.textContent = '•';
-
-        const content = document.createElement('span');
-        content.className = 'info-text';
-        content.textContent = text;
-
-        row.appendChild(bullet);
-        row.appendChild(content);
-        box.appendChild(row);
-      });
-    }
-
-    function buildMarketLines(address, areaName) {
-      const target = `${address || ''} ${areaName || ''}`;
-      if (target.includes('해운대구') || target.includes('수영구')) {
-        return [
-          '주변 시세: 인근 신축·준신축 84㎡ 실거래 약 8.5억~11.5억 원대 형성',
-          '주변 생활: 도시철도 역세권·우수 학군·대형백화점 및 해변 생활권 인접'
-        ];
-      }
-      if (target.includes('연제구') || target.includes('동래구') || target.includes('남구')) {
-        return [
-          '주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~7.2억 원대 형성',
-          '주변 생활: 초·중·고 도보 학군, 도시철도 환승권 및 대형마트·병의원 인접'
-        ];
-      }
-      if (target.includes('강서구') || target.includes('에코델타')) {
-        return [
-          '주변 시세: 명지·에코델타시티 84㎡ 최근 실거래 약 4.8억~5.9억 원대 형성',
-          '주변 생활: 초·중·고 예정부지 인접, 수변공원·중심상업지구 및 김해공항 접근 우수'
-        ];
-      }
-      if (target.includes('북구') || target.includes('사상구') || target.includes('사하구') || target.includes('금정구')) {
-        return [
-          '주변 시세: 인근 84㎡ 최근 실거래 약 3.9억~5.1억 원대 형성',
-          '주변 생활: 초·중학교 도보권, 역세권 상업시설·종합병원 및 생활편의시설 인접'
-        ];
-      }
-      if (target.includes('부산진구') || target.includes('동구') || target.includes('중구') || target.includes('서구') || target.includes('영도구')) {
-        return [
-          '주변 시세: 도심권 인근 84㎡ 최근 실거래 약 4.5억~6.2억 원대 형성',
-          '주변 생활: 서면·원도심 상권, 지하철역 및 종합병원·초중고 학군 인접'
-        ];
-      }
-      if (target.includes('기장군')) {
-        return [
-          '주변 시세: 정관·일광신도시 84㎡ 최근 실거래 약 3.8억~5.2억 원대 형성',
-          '주변 생활: 동해선 역세권, 오시리아 관광단지 및 초·중학교·근린공원 인접'
-        ];
-      }
-      if (target.includes('울산')) {
-        return [
-          '주변 시세: 울산 주요 주거지 84㎡ 최근 실거래 약 4.5억~6.8억 원대 형성',
-          '주변 생활: 초·중·고 학군, 대형마트·종합병원 및 주요 산업단지 직주근접'
-        ];
-      }
-      if (target.includes('창원') || target.includes('김해') || target.includes('양산') || target.includes('경남')) {
-        return [
-          '주변 시세: 경남 주요 택지지구 84㎡ 최근 실거래 약 3.8억~5.5억 원대 형성',
-          '주변 생활: 초·중학교 도보 통학권, 중심상권·병의원 및 광역교통망 인접'
-        ];
-      }
-      if (target.includes('대구') || target.includes('경북')) {
-        return [
-          '주변 시세: 대구·경북 주요 주거지 84㎡ 최근 실거래 약 4.2억~6.5억 원대 형성',
-          '주변 생활: 도시철도 및 학군지 인접, 대형마트·병의원 생활인프라 완비'
-        ];
-      }
-      if (target.includes('서울')) {
-        return [
-          '주변 시세: 서울 권역별 84㎡ 최근 실거래 약 11.5억~18.5억 원대 형성',
-          '주변 생활: 지하철 역세권, 우수 초·중·고 학군 및 백화점·종합병원 인접'
-        ];
-      }
-      if (target.includes('경기') || target.includes('인천')) {
-        return [
-          '주변 시세: 수도권 주요 택지지구 84㎡ 최근 실거래 약 5.8억~8.8억 원대 형성',
-          '주변 생활: 광역철도·GTX 수혜권, 초·중·고 학군 및 중심상업시설 인접'
-        ];
-      }
-      return [
-        '주변 시세: 해당 권역 신축·준신축 84㎡ 최근 실거래 약 3.8억~5.4억 원대 형성',
-        '주변 생활: 인근 초·중·고 학군, 병의원·상업시설 및 주요 간선도로 인접'
+      // =========================================================
+      // 2. 설정값 분리 조합 (평문 직접 노출 완화)
+      // =========================================================
+      const _kParts = ['935de5c23598a914', 'dd97149a0b92614d', 'b7f4de28d991d658', 'd58dfaca03bad3a7'];
+      const _wParts = [
+        'https://script.google.com/macros/s/',
+        'AKfycbyock7nFgqdRlIkhsNk1oj9YekTebtc1SdvEhFYxTq0YuCVcDpwSujj0dR6CEI9t5xj',
+        '/exec'
       ];
-    }
+      const getServiceKey = () => _kParts.join('');
+      const getWebhookUrl = () => _wParts.join('');
 
-    const VERIFIED_EXTRA_SITES = [
-      {
-        name: '에코델타시티 아테라',
-        aliases: '에코델타 아테라 에코델타시티아테라 금호',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티 24BL',
-        areaName: '부산',
-        fallbackLat: 35.149940,
-        fallbackLng: 128.919472,
-        status: STATUS_NORMAL_TEXT,
-        statusColor: STATUS_NORMAL_COLOR,
-        recencyBonus: 12,
-        defaultPriceMan: 54800,
-        infoLines: [
-          '공급위치: 부산광역시 강서구 에코델타시티 24BL (강서초등학교 북측)',
-          '분양정보: 입주예정 2028-03 · 잔여세대 상담 진행 중',
-          '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
-          '주변 생활: 강서초등학교 바로 인접 및 수변공원·중심상업지구 생활권'
-        ]
-      },
-      {
-        name: '에코델타시티 중흥S-클래스 리버시티',
-        aliases: '에코델타 중흥 리버시티 에코델타중흥',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
-        areaName: '부산',
-        fallbackLat: 35.1688,
-        fallbackLng: 128.9385,
-        status: STATUS_NORMAL_TEXT,
-        statusColor: STATUS_NORMAL_COLOR,
-        recencyBonus: 12,
-        defaultPriceMan: 56200,
-        infoLines: [
-          '공급위치: 부산광역시 강서구 에코델타시티',
-          '분양정보: 정당계약일 경과 · 잔여세대 상담 진행 중',
-          '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
-          '주변 생활: 서낙동강 수변공원·초중고 학군 및 중심상업지구 인접'
-        ]
-      },
-      {
-        name: '에코델타시티 중흥S-클래스 에듀리버',
-        aliases: '에코델타 중흥 에듀리버 에코델타중흥',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
-        areaName: '부산',
-        fallbackLat: 35.1725,
-        fallbackLng: 128.9420,
-        status: STATUS_NORMAL_TEXT,
-        statusColor: STATUS_NORMAL_COLOR,
-        recencyBonus: 12,
-        defaultPriceMan: 56800,
-        infoLines: [
-          '공급위치: 부산광역시 강서구 에코델타시티',
-          '분양정보: 입주예정 2028-06 · 잔여세대 상담 진행 중',
-          '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
-          '주변 생활: 초·중·고 예정부지 도보권, 수변공원·중심상업지구 인접'
-        ]
-      },
-      {
-        name: '에코델타시티 엘가로제비앙',
-        aliases: '에코델타 엘가 로제비앙 대광로제비앙',
-        rawAddress: '부산광역시 강서구 강동동 에코델타시티',
-        areaName: '부산',
-        fallbackLat: 35.1652,
-        fallbackLng: 128.9445,
-        status: STATUS_NORMAL_TEXT,
-        statusColor: STATUS_NORMAL_COLOR,
-        recencyBonus: 12,
-        defaultPriceMan: 55400,
-        infoLines: [
-          '공급위치: 부산광역시 강서구 에코델타시티',
-          '분양정보: 입주예정 2029-06 · 잔여세대 상담 진행 중',
-          '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
-          '주변 생활: 에코델타시티 학군 및 수변·상업 인프라 인접'
-        ]
-      }
-    ];
+      const API_DETAIL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
+      const API_MODEL_ENDPOINT = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl';
+      const COORD_CACHE_KEY = 'geohome_coord_cache_v3';
+      const LEAD_QUEUE_KEY = 'geohome_pending_leads_v1';
+      const PRIVACY_ALERT_MSG = '개인정보 수집·이용에 동의(체크)하셔야 상담 진행이 가능합니다.';
 
-    const REGION_DATA = {
-      busan: {
-        label: '부산',
-        center: { lat: 35.1628, lng: 129.0531, level: 6 },
-        districts: [
-          { name: '부산진구', lat: 35.1628, lng: 129.0531, level: 5 },
-          { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
-          { name: '동래구', lat: 35.2048, lng: 129.0836, level: 5 },
-          { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
-          { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
-          { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
-          { name: '강서구', lat: 35.149940, lng: 128.919472, level: 6 },
-          { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
-          { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
-          { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
-          { name: '금정구', lat: 35.2430, lng: 129.0921, level: 5 },
-          { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
-          { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
-          { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
-          { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
-          { name: '기장군', lat: 35.2446, lng: 129.2223, level: 6 }
-        ]
-      },
-      ulgyeong: {
-        label: '울산·경남',
-        center: { lat: 35.3500, lng: 128.9000, level: 9 },
-        districts: [
-          { name: '울산 중구', lat: 35.5694, lng: 129.3328, level: 6 },
-          { name: '울산 남구', lat: 35.5440, lng: 129.3302, level: 6 },
-          { name: '울산 동구', lat: 35.5047, lng: 129.4166, level: 6 },
-          { name: '울산 북구', lat: 35.5824, lng: 129.3611, level: 6 },
-          { name: '울주군', lat: 35.5222, lng: 129.2423, level: 7 },
-          { name: '창원시', lat: 35.2280, lng: 128.6811, level: 7 },
-          { name: '김해시', lat: 35.2285, lng: 128.8894, level: 6 },
-          { name: '양산시', lat: 35.3350, lng: 129.0372, level: 6 },
-          { name: '거제시', lat: 34.8806, lng: 128.6211, level: 7 },
-          { name: '진주시', lat: 35.1800, lng: 128.1076, level: 7 }
-        ]
-      },
-      daegyeong: {
-        label: '대구·경북',
-        center: { lat: 35.8714, lng: 128.6014, level: 9 },
-        districts: [
-          { name: '대구 중구', lat: 35.8693, lng: 128.6062, level: 5 },
-          { name: '대구 동구', lat: 35.8868, lng: 128.6355, level: 6 },
-          { name: '대구 서구', lat: 35.8719, lng: 128.5591, level: 5 },
-          { name: '대구 남구', lat: 35.8460, lng: 128.5977, level: 5 },
-          { name: '대구 북구', lat: 35.8858, lng: 128.5829, level: 6 },
-          { name: '수성구', lat: 35.8581, lng: 128.6306, level: 6 },
-          { name: '달서구', lat: 35.8298, lng: 128.5327, level: 6 },
-          { name: '달성군', lat: 35.7747, lng: 128.4314, level: 7 },
-          { name: '포항시', lat: 36.0190, lng: 129.3435, level: 7 },
-          { name: '구미시', lat: 36.1195, lng: 128.3446, level: 7 },
-          { name: '경산시', lat: 35.8251, lng: 128.7414, level: 6 }
-        ]
-      },
-      capital: {
-        label: '서울·수도권',
-        center: { lat: 37.5665, lng: 126.9780, level: 9 },
-        districts: [
-          { name: '강남구', lat: 37.5172, lng: 127.0473, level: 6 },
-          { name: '서초구', lat: 37.4837, lng: 127.0324, level: 6 },
-          { name: '송파구', lat: 37.5145, lng: 127.1059, level: 6 },
-          { name: '강동구', lat: 37.5301, lng: 127.1238, level: 6 },
-          { name: '마포구', lat: 37.5663, lng: 126.9016, level: 6 },
-          { name: '용산구', lat: 37.5326, lng: 126.9905, level: 6 },
-          { name: '영등포구', lat: 37.5264, lng: 126.8962, level: 6 },
-          { name: '노원구', lat: 37.6542, lng: 127.0568, level: 6 },
-          { name: '수원시', lat: 37.2636, lng: 127.0286, level: 7 },
-          { name: '성남시', lat: 37.4200, lng: 127.1267, level: 7 },
-          { name: '용인시', lat: 37.2411, lng: 127.1775, level: 7 },
-          { name: '화성시', lat: 37.1995, lng: 126.8312, level: 8 },
-          { name: '인천 연수구', lat: 37.4101, lng: 126.6783, level: 6 },
-          { name: '인천 서구', lat: 37.5454, lng: 126.6760, level: 6 }
-        ]
-      },
-      etc: {
-        label: '충청·전라·강원',
-        center: { lat: 36.3504, lng: 127.3845, level: 11 },
-        districts: [
-          { name: '대전 서구', lat: 36.3554, lng: 127.3837, level: 6 },
-          { name: '대전 유성구', lat: 36.3622, lng: 127.3565, level: 6 },
-          { name: '세종시', lat: 36.4801, lng: 127.2890, level: 7 },
-          { name: '천안시', lat: 36.8151, lng: 127.1139, level: 7 },
-          { name: '청주시', lat: 36.6424, lng: 127.4890, level: 7 },
-          { name: '광주 서구', lat: 35.1520, lng: 126.8895, level: 6 },
-          { name: '전주시', lat: 35.8242, lng: 127.1480, level: 7 },
-          { name: '원주시', lat: 37.3422, lng: 127.9202, level: 7 },
-          { name: '춘천시', lat: 37.8813, lng: 127.7298, level: 7 }
-        ]
-      }
-    };
+      const INITIAL_CENTER = Object.freeze({ lat: 35.1628, lng: 129.0531, level: 6 });
+      const STATUS_NORMAL_TEXT = '상담진행중(분양마감 확인 필요)';
+      const STATUS_NORMAL_COLOR = '#0066cc';
+      const STATUS_OLD_LARGE_TEXT = '분양마감 확인 필요';
+      const STATUS_OLD_LARGE_COLOR = '#dc2626';
 
-    function getSlotIndex30Min() {
-      return Math.floor(Date.now() / (30 * 60 * 1000));
-    }
+      const ALIAS_GROUPS = [
+        ['중흥', '중흥s클래스', 's클래스', '에스클래스'],
+        ['푸르지오', '대우'],
+        ['자이', 'gs'],
+        ['더샵', '포스코'],
+        ['포레나', '한화'],
+        ['힐스테이트', '현대'],
+        ['래미안', '삼성'],
+        ['롯데캐슬', '롯데'],
+        ['아이파크', 'hdc'],
+        ['e편한세상', '이편한세상', 'dl'],
+        ['에코델타', '에코델타시티', '강서구'],
+        ['아테라', '금호건설'],
+        ['리버시티', '에듀리버']
+      ];
 
-    // 시간대별 + 최근 현장 가중치 반영 관심·조회 인원 계산 (추후 실제 GA4/DB 수치로 교체 가능)
-    function getDynamicViewers(site, idx) {
-      const now = new Date();
-      const hour = now.getHours();
-      const slot = getSlotIndex30Min();
-      const seed = site.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+      let activeSiteForConsult = null;
+      let coordCache = loadCoordCache();
 
-      let minVal = 22;
-      let maxVal = 36;
-
-      if (hour >= 0 && hour < 6) {
-        // 자정(00시) ~ 06시: 10여 명 내외 (8~14명)
-        minVal = 8;
-        maxVal = 14;
-      } else if (hour >= 6 && hour < 9) {
-        // 06시 ~ 09시: 점진 증가 (15~26명)
-        minVal = 15;
-        maxVal = 26;
-      } else if ((hour >= 10 && hour < 12) || (hour >= 14 && hour < 17) || (hour >= 20 && hour < 22)) {
-        // 피크 시간대 (32~52명)
-        minVal = 32;
-        maxVal = 52;
-      } else if (hour >= 23) {
-        // 오후 11시 ~ 자정: 점차 감소 (13~21명)
-        minVal = 13;
-        maxVal = 21;
-      } else {
-        // 일반 시간대 (22~36명)
-        minVal = 22;
-        maxVal = 36;
+      function showToast(msg, durationMs) {
+        const toast = document.getElementById('status-toast');
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        if (durationMs && durationMs > 0) {
+          clearTimeout(toast._timer);
+          toast._timer = setTimeout(function () {
+            toast.style.display = 'none';
+          }, durationMs);
+        }
       }
 
-      const range = maxVal - minVal + 1;
-      const base = minVal + ((seed + idx * 7) % range);
-      const step = ((slot * 3 + idx * 5 + seed) % 5) - 2;
-      let val = base + step;
-
-      if (val < minVal) val = minVal + ((seed + slot) % 3);
-      if (val > maxVal) val = maxVal - ((seed + slot) % 3);
-
-      const bonus = Number(site.recencyBonus || 0);
-      val = Math.max(5, Math.min(68, val + bonus));
-      return val;
-    }
-
-    function formatManToWonText(man) {
-      const n = Math.max(0, Math.round(Number(man) || 0));
-      const eok = Math.floor(n / 10000);
-      const remMan = n % 10000;
-      const manStr = n.toLocaleString('ko-KR') + '만원';
-      if (eok > 0) {
-        return remMan > 0 ? `${eok}억 ${remMan.toLocaleString('ko-KR')}만원` : `${eok}억 원`;
+      function loadCoordCache() {
+        try {
+          const raw = localStorage.getItem(COORD_CACHE_KEY);
+          const parsed = raw ? JSON.parse(raw) : {};
+          return (parsed && typeof parsed === 'object') ? parsed : {};
+        } catch (e) {
+          return {};
+        }
       }
-      return manStr;
-    }
 
-    let currentRate = 0.05;
-
-    function getCalcSummaryText() {
-      const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
-      const downMan = Math.round(totalMan * currentRate);
-      const middleMan = Math.round(totalMan * 0.60);
-      const balanceMan = Math.max(0, totalMan - downMan - middleMan);
-      const ratePct = Math.round(currentRate * 100);
-      const remPct = Math.max(0, 40 - ratePct);
-
-      return (
-        `총분양대금 ${formatManToWonText(totalMan)} / ` +
-        `계약금(${ratePct}%) ${formatManToWonText(downMan)} / ` +
-        `중도금(60%) ${formatManToWonText(middleMan)} / ` +
-        `잔금(${remPct}%) ${formatManToWonText(balanceMan)}`
-      );
-    }
-
-    function updateCalc() {
-      const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
-      const downMan = Math.round(totalMan * currentRate);
-      const middleMan = Math.round(totalMan * 0.60);
-      const balanceMan = Math.max(0, totalMan - downMan - middleMan);
-
-      document.getElementById('calc-result').innerHTML =
-        `총분양대금: <strong>${formatManToWonText(totalMan)}</strong><br>` +
-        `• 계약금 (${Math.round(currentRate * 100)}%): <strong>${formatManToWonText(downMan)}</strong><br>` +
-        `• 중도금 (60%): <strong>${formatManToWonText(middleMan)}</strong><br>` +
-        `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
-    }
-
-    function formatDateObjYYYYMMDD(dateObj) {
-      const y = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dateObj.getDate()).padStart(2, '0');
-      return `${y}${m}${d}`;
-    }
-
-    function getTodayYYYYMMDD() {
-      return formatDateObjYYYYMMDD(new Date());
-    }
-
-    function getTwoYearsAgoYYYYMMDD() {
-      const dt = new Date();
-      dt.setFullYear(dt.getFullYear() - 2);
-      return formatDateObjYYYYMMDD(dt);
-    }
-
-    function getSixMonthsAgoYYYYMM() {
-      const dt = new Date();
-      dt.setMonth(dt.getMonth() - 6);
-      const y = dt.getFullYear();
-      const m = String(dt.getMonth() + 1).padStart(2, '0');
-      return `${y}${m}`;
-    }
-
-    function isMovedInMoreThanSixMonthsAgo(moveInVal) {
-      const digits = String(moveInVal || '').replace(/[^0-9]/g, '');
-      if (digits.length < 6) return false;
-      const ym = digits.slice(0, 6);
-      return ym < getSixMonthsAgoYYYYMM();
-    }
-
-    function normalizeDateDigits(val) {
-      if (!val) return '';
-      return String(val).replace(/[^0-9]/g, '').slice(0, 8);
-    }
-
-    function cleanSupplyAddress(rawAddr) {
-      if (!rawAddr) return '';
-      return String(rawAddr)
-        .replace(/\([^)]*\)/g, ' ')
-        .replace(/외\s*\d+\s*필지.*/g, '')
-        .replace(/일원.*/g, '')
-        .replace(/일대.*/g, '')
-        .replace(/[A-Za-z0-9-]+블록.*/g, '')
-        .replace(/지구.*/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    async function fetchModelPriceMap() {
-      const priceMap = new Map();
-      const infoMap = new Map();
-      try {
-        const pages = [1, 2, 3];
-        const responses = await Promise.all(
-          pages.map((p) =>
-            fetch(`${API_MODEL_ENDPOINT}?page=${p}&perPage=1000&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`)
-              .then((r) => (r.ok ? r.json() : { data: [] }))
-              .catch(() => ({ data: [] }))
-          )
-        );
-
-        responses.forEach((json) => {
-          const rows = Array.isArray(json.data) ? json.data : [];
-          rows.forEach((m) => {
-            const manageNo = String(m.HOUSE_MANAGE_NO || '');
-            const rawAmt = String(m.LTTOT_TOP_AMOUNT || '').replace(/[^0-9]/g, '');
-            const amtMan = Number(rawAmt);
-            if (!manageNo || !amtMan || amtMan <= 0) return;
-
-            const modelType = m.HOUSE_TY || '';
-            const existing = priceMap.get(manageNo);
-            const is84 = /^0?84/.test(modelType);
-            if (!existing || is84) {
-              priceMap.set(manageNo, amtMan);
-              if (modelType) infoMap.set(manageNo, `${modelType}㎡ 최고가`);
-            }
-          });
-        });
-      } catch (e) {}
-      return { priceMap, infoMap };
-    }
-
-    async function fetchFirstComeSites() {
-      const detailPages = [1, 2, 3];
-      const [detailJsons, modelData] = await Promise.all([
-        Promise.all(
-          detailPages.map((p) =>
-            fetch(`${API_DETAIL_ENDPOINT}?page=${p}&perPage=1000&serviceKey=${encodeURIComponent(API_SERVICE_KEY)}`)
-              .then((r) => (r.ok ? r.json() : { data: [] }))
-              .catch(() => ({ data: [] }))
-          )
-        ),
-        fetchModelPriceMap()
-      ]);
-
-      const allRows = [];
-      const seenManageNos = new Set();
-      detailJsons.forEach((json) => {
-        const rows = Array.isArray(json.data) ? json.data : [];
-        rows.forEach((row) => {
-          const id = String(row.HOUSE_MANAGE_NO || row.HOUSE_NM || '');
-          if (id && !seenManageNos.has(id)) {
-            seenManageNos.add(id);
-            allRows.push(row);
+      function saveCoordCache() {
+        try {
+          const keys = Object.keys(coordCache);
+          if (keys.length > 800) {
+            keys.slice(0, keys.length - 800).forEach((k) => delete coordCache[k]);
           }
-        });
-      });
+          localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(coordCache));
+        } catch (e) {}
+      }
 
-      const todayStr = getTodayYYYYMMDD();
-      const twoYearsAgoStr = getTwoYearsAgoYYYYMMDD();
+      // =========================================================
+      // 3. 운영 안정화: 개인정보 동의 검증 및 리드 전송 유실 방지
+      // =========================================================
+      function isPrivacyAgreed() {
+        const cb = document.getElementById('privacy-agree-check');
+        return Boolean(cb && cb.checked);
+      }
 
-      const filtered = allRows.filter((row) => {
-        if (isMovedInMoreThanSixMonthsAgo(row.MVN_PREARNGE_YM)) {
+      function requirePrivacyAgreement(e) {
+        const cb = document.getElementById('privacy-agree-check');
+        const box = document.getElementById('privacy-box');
+        if (!cb || !cb.checked) {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          alert(PRIVACY_ALERT_MSG);
+          if (box) {
+            box.classList.add('error-highlight');
+            setTimeout(() => box.classList.remove('error-highlight'), 2500);
+          }
+          if (cb) {
+            cb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cb.focus();
+          }
           return false;
-        }
-        const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
-        if (!contractEnd || contractEnd.length !== 8 || contractEnd >= todayStr) {
-          return false;
-        }
-        const isOlderThanTwoYears = contractEnd < twoYearsAgoStr;
-        if (isOlderThanTwoYears) {
-          const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
-          return totalUnits > 500;
         }
         return true;
-      });
-
-      const apiMapped = filtered.map((row, idx) => {
-        const manageNo = String(row.HOUSE_MANAGE_NO || '');
-        const name = row.HOUSE_NM || `분양현장 ${idx + 1}`;
-        const rawAddress = row.HSSPLY_ADRES || '';
-        const areaName = row.SUBSCRPT_AREA_CODE_NM || '';
-        const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
-        const supplyCnt = totalUnits > 0 ? `총 ${totalUnits}세대` : '';
-        const contractEndDigits = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
-        const isOlderThanTwoYears = contractEndDigits && contractEndDigits < twoYearsAgoStr;
-        const contractEndHyphen = formatHyphenDate(row.CNTRCT_CNCLS_ENDDE);
-        const moveInHyphen = formatHyphenDate(row.MVN_PREARNGE_YM);
-
-        // 최근 분양 현장(+12) 가중치 적용, 오래된 현장(-6) 차등 반영
-        const recencyBonus = isOlderThanTwoYears ? -6 : 12;
-
-        const infoParts = [];
-        if (supplyCnt) infoParts.push(supplyCnt);
-        if (contractEndHyphen) infoParts.push(`정당계약종료 ${contractEndHyphen}`);
-        if (moveInHyphen) infoParts.push(`입주예정 ${moveInHyphen}`);
-
-        const realPriceMan = modelData.priceMap.get(manageNo);
-        const typeLabel = modelData.infoMap.get(manageNo);
-        const marketLines = buildMarketLines(rawAddress, areaName);
-
-        const lines = [
-          `공급위치: ${rawAddress || areaName}`,
-          `분양정보: ${infoParts.length ? infoParts.join(' · ') : '정당계약일 경과 · 상담 진행 중'}` +
-            (typeLabel ? ` (${typeLabel})` : ''),
-          ...marketLines
-        ];
-
-        const isAtera = normalizeSearchKey(name).includes('에코델타') && normalizeSearchKey(name).includes('아테라');
-
-        return {
-          name,
-          aliases: isAtera ? '에코델타 아테라 에코델타시티아테라' : '',
-          rawAddress,
-          areaName,
-          fallbackLat: isAtera ? 35.149940 : undefined,
-          fallbackLng: isAtera ? 128.919472 : undefined,
-          status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
-          statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
-          recencyBonus,
-          defaultPriceMan: realPriceMan || 55000,
-          infoLines: lines
-        };
-      });
-
-      const existingNames = new Set(apiMapped.map((s) => normalizeSearchKey(s.name)));
-      VERIFIED_EXTRA_SITES.forEach((extraSite) => {
-        const norm = normalizeSearchKey(extraSite.name);
-        if (!existingNames.has(norm)) {
-          apiMapped.unshift(extraSite);
-        }
-      });
-
-      apiMapped.sort((a, b) => {
-        const aBusan = (`${a.areaName} ${a.rawAddress}`).includes('부산') ? 0 : 1;
-        const bBusan = (`${b.areaName} ${b.rawAddress}`).includes('부산') ? 0 : 1;
-        return aBusan - bBusan;
-      });
-
-      return apiMapped;
-    }
-
-    function resolveAccurateCoords(geocoder, places, site) {
-      return new Promise((resolve) => {
-        if (site.fallbackLat && site.fallbackLng) {
-          return resolve({ lat: site.fallbackLat, lng: site.fallbackLng });
-        }
-
-        const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
-        if (cacheKey && coordCache[cacheKey]) {
-          return resolve(coordCache[cacheKey]);
-        }
-
-        const finishWith = (coords) => {
-          if (coords && cacheKey) {
-            coordCache[cacheKey] = coords;
-          }
-          resolve(coords);
-        };
-
-        const cleaned = cleanSupplyAddress(site.rawAddress);
-        const tokens = cleaned.split(' ').filter(Boolean);
-        const sigunguPrefix = tokens.slice(0, 2).join(' ');
-
-        const trySigunguFallback = () => {
-          if (!sigunguPrefix) return finishWith(null);
-          places.keywordSearch(sigunguPrefix, function (sData, sStatus) {
-            if (sStatus === kakao.maps.services.Status.OK && sData && sData[0]) {
-              const jitterLat = ((Math.random() - 0.5) * 0.008);
-              const jitterLng = ((Math.random() - 0.5) * 0.008);
-              finishWith({ lat: Number(sData[0].y) + jitterLat, lng: Number(sData[0].x) + jitterLng });
-            } else {
-              finishWith(null);
-            }
-          });
-        };
-
-        const tryKeywordFallback = () => {
-          const kw = `${sigunguPrefix} ${site.name}`.trim();
-          if (!kw) return trySigunguFallback();
-          places.keywordSearch(kw, function (data, status) {
-            if (status === kakao.maps.services.Status.OK && data && data[0]) {
-              finishWith({ lat: Number(data[0].y), lng: Number(data[0].x) });
-            } else {
-              places.keywordSearch(site.name, function (data2, status2) {
-                if (status2 === kakao.maps.services.Status.OK && data2 && data2[0]) {
-                  finishWith({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
-                } else {
-                  trySigunguFallback();
-                }
-              });
-            }
-          });
-        };
-
-        const primaryKw = `${sigunguPrefix} ${site.name}`.trim();
-        places.keywordSearch(primaryKw, function (pData, pStatus) {
-          if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
-            return finishWith({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
-          }
-
-          if (!cleaned) return tryKeywordFallback();
-
-          geocoder.addressSearch(cleaned, function (result, status) {
-            if (status === kakao.maps.services.Status.OK && result && result[0]) {
-              finishWith({ lat: Number(result[0].y), lng: Number(result[0].x) });
-            } else {
-              tryKeywordFallback();
-            }
-          });
-        });
-      });
-    }
-
-    kakao.maps.load(async function () {
-      const mapEl = document.getElementById('map');
-      const map = new kakao.maps.Map(mapEl, {
-        center: new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng),
-        level: INITIAL_CENTER.level
-      });
-      const geocoder = new kakao.maps.services.Geocoder();
-      const places = new kakao.maps.services.Places();
-      const toast = document.getElementById('status-toast');
-
-      // 좌표 확인용: 지도 클릭 시 위도·경도 표시 및 복사
-      kakao.maps.event.addListener(map, 'click', function (mouseEvent) {
-        const latlng = mouseEvent.latLng;
-        const lat = Number(latlng.getLat()).toFixed(6);
-        const lng = Number(latlng.getLng()).toFixed(6);
-        const coordText = `${lat}, ${lng}`;
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(coordText).catch(function () {});
-        }
-
-        toast.style.display = 'block';
-        toast.textContent = `좌표 복사됨: ${coordText}`;
-        setTimeout(function () {
-          toast.style.display = 'none';
-        }, 3000);
-      });
-
-      const panel = document.getElementById('detail-panel');
-      const districtBar = document.getElementById('district-bar');
-      const dropdown = document.getElementById('search-dropdown');
-      const searchInput = document.getElementById('search-input');
-
-      let activeRegionKey = 'busan';
-      let isSitesLoaded = false;
-      let pendingSearchAfterLoad = false;
-
-      function renderDistrictBar(regionKey, selectFirst) {
-        const reg = REGION_DATA[regionKey];
-        if (!reg) return;
-        districtBar.innerHTML = '';
-        reg.districts.forEach((d, idx) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'district-btn' + (selectFirst && idx === 0 ? ' selected' : '');
-          btn.textContent = d.name;
-          btn.onclick = function () {
-            document.querySelectorAll('.district-btn').forEach((b) => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            map.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
-            map.setLevel(d.level);
-          };
-          districtBar.appendChild(btn);
-        });
       }
 
-      renderDistrictBar('busan', true);
+      window.checkPrivacyAgreed = isPrivacyAgreed;
 
-      document.querySelectorAll('.region-tab').forEach((tab) => {
-        tab.onclick = function () {
-          const key = tab.getAttribute('data-region');
-          document.querySelectorAll('.region-tab').forEach((t) => t.classList.remove('active'));
-          tab.classList.add('active');
-          activeRegionKey = key;
+      function enqueueLeadBackup(payload) {
+        try {
+          const raw = localStorage.getItem(LEAD_QUEUE_KEY);
+          const list = raw ? JSON.parse(raw) : [];
+          list.push({ id: payload._leadId, payload: payload, ts: Date.now() });
+          localStorage.setItem(LEAD_QUEUE_KEY, JSON.stringify(list.slice(-20)));
+        } catch (e) {}
+      }
 
-          renderDistrictBar(key, true);
+      function removeLeadFromBackup(leadId) {
+        try {
+          const raw = localStorage.getItem(LEAD_QUEUE_KEY);
+          if (!raw) return;
+          const list = JSON.parse(raw).filter((item) => item.id !== leadId);
+          localStorage.setItem(LEAD_QUEUE_KEY, JSON.stringify(list));
+        } catch (e) {}
+      }
 
-          const reg = REGION_DATA[key];
-          if (reg && reg.center) {
-            map.setCenter(new kakao.maps.LatLng(reg.center.lat, reg.center.lng));
-            map.setLevel(reg.center.level);
-          }
-        };
-      });
+      function sendLeadToSheet(rawPayload) {
+        // 전송 전 동의 재검증
+        if (!isPrivacyAgreed()) return;
 
-      document.getElementById('close-btn').onclick = function () {
-        panel.style.display = 'none';
-      };
+        const webhookUrl = getWebhookUrl();
+        if (!webhookUrl) return;
 
-      const btn5 = document.getElementById('rate-5');
-      const btn10 = document.getElementById('rate-10');
-      const priceInput = document.getElementById('total-price-input');
-      const kakaoBtn = document.getElementById('kakao-link');
-
-      btn5.onclick = function () {
-        currentRate = 0.05;
-        btn5.classList.add('active');
-        btn10.classList.remove('active');
-        updateCalc();
-      };
-      btn10.onclick = function () {
-        currentRate = 0.10;
-        btn10.classList.add('active');
-        btn5.classList.remove('active');
-        updateCalc();
-      };
-      priceInput.oninput = updateCalc;
-
-      kakaoBtn.onclick = function (e) {
-        if (!requirePrivacyAgreement(e)) {
-          return false;
-        }
-        const site = activeSiteForConsult || {};
-        const summary = getCalcSummaryText();
-        sendLeadToSheet({
-          channel: '지도_카톡상담',
-          siteName: site.name || '미지정',
-          region: site.areaName || REGION_DATA[activeRegionKey]?.label || '부산',
-          customerName: '카톡문의고객',
-          phone: '-',
-          visitDate: '-',
+        const leadId = 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        const payload = Object.assign({}, rawPayload, {
+          _leadId: leadId,
           agree: '동의합니다.',
-          conditions: `${summary} / 위치: ${site.rawAddress || site.areaName || '-'}`
+          timestamp: new Date().toISOString()
         });
-      };
 
-      document.querySelectorAll('form').forEach(function (form) {
-        form.addEventListener('submit', requirePrivacyAgreement, true);
-      });
+        enqueueLeadBackup(payload);
+        const bodyStr = JSON.stringify(payload);
 
-      document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, [role="button"]').forEach(function (el) {
-        if (el.id === 'kakao-link' || el.id === 'rate-5' || el.id === 'rate-10' || el.id === 'search-btn' || el.id === 'reset-btn' || el.id === 'close-btn') {
+        let beaconSent = false;
+        try {
+          if (navigator.sendBeacon) {
+            const blob = new Blob([bodyStr], { type: 'text/plain;charset=utf-8' });
+            beaconSent = navigator.sendBeacon(webhookUrl, blob);
+          }
+        } catch (e) {}
+
+        if (beaconSent) {
+          removeLeadFromBackup(leadId);
           return;
         }
-        const text = (el.textContent || el.value || '').trim();
-        if (/상담|전송|신청|문의|제출|접수/.test(text)) {
-          el.addEventListener('click', requirePrivacyAgreement, true);
-        }
-      });
 
-      function hideDropdown() {
-        dropdown.style.display = 'none';
-        dropdown.innerHTML = '';
+        fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          keepalive: true,
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: bodyStr
+        })
+          .then(function () {
+            removeLeadFromBackup(leadId);
+          })
+          .catch(function () {});
       }
 
-      function showLoadingInDropdown() {
-        dropdown.innerHTML = '<div class="dropdown-loading">분양현장 목록을 불러오는 중입니다...</div>';
-        dropdown.style.display = 'block';
-      }
-
-      const renderedItems = [];
-
-      function focusMatchedItem(item) {
-        map.setCenter(item.pos);
-        map.setLevel(5);
-        item.openPanel();
-        hideDropdown();
-      }
-
-      function renderSearchDropdown(matched) {
-        dropdown.innerHTML = '';
-        if (!matched.length) {
-          hideDropdown();
-          return;
-        }
-        matched.forEach((item) => {
-          const optBtn = document.createElement('button');
-          optBtn.type = 'button';
-          optBtn.className = 'search-option';
-
-          const titleEl = document.createElement('span');
-          titleEl.className = 'search-option-title';
-          titleEl.textContent = item.site.name;
-
-          const subEl = document.createElement('span');
-          subEl.className = 'search-option-sub';
-          subEl.textContent = item.site.rawAddress || item.site.areaName || '위치 확인 가능';
-
-          optBtn.appendChild(titleEl);
-          optBtn.appendChild(subEl);
-          optBtn.onclick = function () {
-            focusMatchedItem(item);
-          };
-          dropdown.appendChild(optBtn);
-        });
-        dropdown.style.display = 'block';
-      }
-
-      const previewMatches = function () {
-        const q = searchInput.value.trim();
-        if (!q) {
-          hideDropdown();
-          return [];
-        }
-        if (!isSitesLoaded) {
-          pendingSearchAfterLoad = true;
-          showLoadingInDropdown();
-          return [];
-        }
-        const matched = renderedItems.filter((item) => matchesFlexibleQuery(item, q));
-        renderSearchDropdown(matched);
-        return matched;
-      };
-
-      const runSearch = function () {
-        const rawQ = searchInput.value.trim();
-        if (!rawQ) {
-          pendingSearchAfterLoad = false;
-          hideDropdown();
-          renderedItems.forEach((item) => {
-            item.marker.setMap(map);
-            item.overlay.setMap(map);
+      function flushPendingLeads() {
+        try {
+          const raw = localStorage.getItem(LEAD_QUEUE_KEY);
+          if (!raw) return;
+          const list = JSON.parse(raw);
+          if (!Array.isArray(list) || !list.length) return;
+          const webhookUrl = getWebhookUrl();
+          list.forEach((item) => {
+            if (!item || !item.payload) return;
+            const bodyStr = JSON.stringify(item.payload);
+            if (navigator.sendBeacon) {
+              const ok = navigator.sendBeacon(webhookUrl, new Blob([bodyStr], { type: 'text/plain;charset=utf-8' }));
+              if (ok) removeLeadFromBackup(item.id);
+            }
           });
-          map.setCenter(new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng));
-          map.setLevel(INITIAL_CENTER.level);
-          return;
+        } catch (e) {}
+      }
+
+      window.addEventListener('pagehide', flushPendingLeads);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushPendingLeads();
+      });
+
+      // =========================================================
+      // 4. 운영 안정화: 타임아웃 · 재시도 포함 안전 API 호출기
+      // =========================================================
+      async function fetchJsonWithRetry(url, timeoutMs = 8000, retries = 1) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+            clearTimeout(timer);
+            if (res.ok) {
+              return await res.json();
+            }
+          } catch (e) {
+            clearTimeout(timer);
+          }
+          if (attempt < retries) {
+            await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          }
+        }
+        return { data: [] };
+      }
+
+      function normalizeSearchKey(str) {
+        return String(str || '')
+          .toLowerCase()
+          .replace(/[\s\-·.,()\[\]/_]+/g, '');
+      }
+
+      function expandQueryAliases(normToken) {
+        const set = new Set([normToken]);
+        ALIAS_GROUPS.forEach((group) => {
+          if (group.some((alias) => alias.includes(normToken) || normToken.includes(alias))) {
+            group.forEach((alias) => set.add(alias));
+          }
+        });
+        return Array.from(set);
+      }
+
+      function matchesFlexibleQuery(item, rawQuery) {
+        const trimmed = String(rawQuery || '').trim();
+        if (!trimmed) return true;
+
+        const combinedText = `${item.site.name} ${item.site.rawAddress || ''} ${item.site.areaName || ''} ${item.site.aliases || ''}`;
+        const normHay = normalizeSearchKey(combinedText);
+        const compactQuery = normalizeSearchKey(trimmed);
+
+        if (compactQuery && normHay.includes(compactQuery)) {
+          return true;
         }
 
-        if (!isSitesLoaded) {
-          pendingSearchAfterLoad = true;
-          showLoadingInDropdown();
-          return;
+        const tokens = trimmed.split(/\s+/).map(normalizeSearchKey).filter(Boolean);
+        if (tokens.length === 0) return true;
+
+        return tokens.every((tok) => {
+          if (normHay.includes(tok)) return true;
+          const aliases = expandQueryAliases(tok);
+          return aliases.some((al) => normHay.includes(al));
+        });
+      }
+
+      function formatHyphenDate(val) {
+        if (!val) return '';
+        const digits = String(val).replace(/[^0-9]/g, '');
+        if (digits.length >= 8) {
+          return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+        }
+        if (digits.length === 6) {
+          return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
+        }
+        return String(val).trim();
+      }
+
+      function renderInfoLines(lines) {
+        const box = document.getElementById('site-desc');
+        box.innerHTML = '';
+        (lines || []).forEach((text) => {
+          const row = document.createElement('div');
+          row.className = 'info-line';
+
+          const bullet = document.createElement('span');
+          bullet.className = 'info-bullet';
+          bullet.textContent = '•';
+
+          const content = document.createElement('span');
+          content.className = 'info-text';
+          content.textContent = text;
+
+          row.appendChild(bullet);
+          row.appendChild(content);
+          box.appendChild(row);
+        });
+      }
+
+      function buildMarketLines(address, areaName) {
+        const target = `${address || ''} ${areaName || ''}`;
+        if (target.includes('해운대구') || target.includes('수영구')) {
+          return [
+            '주변 시세: 인근 신축·준신축 84㎡ 실거래 약 8.5억~11.5억 원대 형성',
+            '주변 생활: 도시철도 역세권·우수 학군·대형백화점 및 해변 생활권 인접'
+          ];
+        }
+        if (target.includes('연제구') || target.includes('동래구') || target.includes('남구')) {
+          return [
+            '주변 시세: 인근 84㎡ 최근 실거래 약 5.8억~7.2억 원대 형성',
+            '주변 생활: 초·중·고 도보 학군, 도시철도 환승권 및 대형마트·병의원 인접'
+          ];
+        }
+        if (target.includes('강서구') || target.includes('에코델타')) {
+          return [
+            '주변 시세: 명지·에코델타시티 84㎡ 최근 실거래 약 4.8억~5.9억 원대 형성',
+            '주변 생활: 초·중·고 예정부지 인접, 수변공원·중심상업지구 및 김해공항 접근 우수'
+          ];
+        }
+        if (target.includes('북구') || target.includes('사상구') || target.includes('사하구') || target.includes('금정구')) {
+          return [
+            '주변 시세: 인근 84㎡ 최근 실거래 약 3.9억~5.1억 원대 형성',
+            '주변 생활: 초·중학교 도보권, 역세권 상업시설·종합병원 및 생활편의시설 인접'
+          ];
+        }
+        if (target.includes('부산진구') || target.includes('동구') || target.includes('중구') || target.includes('서구') || target.includes('영도구')) {
+          return [
+            '주변 시세: 도심권 인근 84㎡ 최근 실거래 약 4.5억~6.2억 원대 형성',
+            '주변 생활: 서면·원도심 상권, 지하철역 및 종합병원·초중고 학군 인접'
+          ];
+        }
+        if (target.includes('기장군')) {
+          return [
+            '주변 시세: 정관·일광신도시 84㎡ 최근 실거래 약 3.8억~5.2억 원대 형성',
+            '주변 생활: 동해선 역세권, 오시리아 관광단지 및 초·중학교·근린공원 인접'
+          ];
+        }
+        if (target.includes('울산')) {
+          return [
+            '주변 시세: 울산 주요 주거지 84㎡ 최근 실거래 약 4.5억~6.8억 원대 형성',
+            '주변 생활: 초·중·고 학군, 대형마트·종합병원 및 주요 산업단지 직주근접'
+          ];
+        }
+        if (target.includes('창원') || target.includes('김해') || target.includes('양산') || target.includes('경남')) {
+          return [
+            '주변 시세: 경남 주요 택지지구 84㎡ 최근 실거래 약 3.8억~5.5억 원대 형성',
+            '주변 생활: 초·중학교 도보 통학권, 중심상권·병의원 및 광역교통망 인접'
+          ];
+        }
+        if (target.includes('대구') || target.includes('경북')) {
+          return [
+            '주변 시세: 대구·경북 주요 주거지 84㎡ 최근 실거래 약 4.2억~6.5억 원대 형성',
+            '주변 생활: 도시철도 및 학군지 인접, 대형마트·병의원 생활인프라 완비'
+          ];
+        }
+        if (target.includes('서울')) {
+          return [
+            '주변 시세: 서울 권역별 84㎡ 최근 실거래 약 11.5억~18.5억 원대 형성',
+            '주변 생활: 지하철 역세권, 우수 초·중·고 학군 및 백화점·종합병원 인접'
+          ];
+        }
+        if (target.includes('경기') || target.includes('인천')) {
+          return [
+            '주변 시세: 수도권 주요 택지지구 84㎡ 최근 실거래 약 5.8억~8.8억 원대 형성',
+            '주변 생활: 광역철도·GTX 수혜권, 초·중·고 학군 및 중심상업시설 인접'
+          ];
+        }
+        return [
+          '주변 시세: 해당 권역 신축·준신축 84㎡ 최근 실거래 약 3.8억~5.4억 원대 형성',
+          '주변 생활: 인근 초·중·고 학군, 병의원·상업시설 및 주요 간선도로 인접'
+        ];
+      }
+
+      const VERIFIED_EXTRA_SITES = [
+        Object.freeze({
+          name: '에코델타시티 아테라',
+          aliases: '에코델타 아테라 에코델타시티아테라 금호',
+          rawAddress: '부산광역시 강서구 강동동 에코델타시티 24BL',
+          areaName: '부산',
+          fallbackLat: 35.149940,
+          fallbackLng: 128.919472,
+          status: STATUS_NORMAL_TEXT,
+          statusColor: STATUS_NORMAL_COLOR,
+          recencyBonus: 12,
+          defaultPriceMan: 54800,
+          infoLines: Object.freeze([
+            '공급위치: 부산광역시 강서구 에코델타시티 24BL (강서초등학교 북측)',
+            '분양정보: 입주예정 2028-03 · 잔여세대 상담 진행 중',
+            '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
+            '주변 생활: 강서초등학교 바로 인접 및 수변공원·중심상업지구 생활권'
+          ])
+        }),
+        Object.freeze({
+          name: '에코델타시티 중흥S-클래스 리버시티',
+          aliases: '에코델타 중흥 리버시티 에코델타중흥',
+          rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+          areaName: '부산',
+          fallbackLat: 35.1688,
+          fallbackLng: 128.9385,
+          status: STATUS_NORMAL_TEXT,
+          statusColor: STATUS_NORMAL_COLOR,
+          recencyBonus: 12,
+          defaultPriceMan: 56200,
+          infoLines: Object.freeze([
+            '공급위치: 부산광역시 강서구 에코델타시티',
+            '분양정보: 정당계약일 경과 · 잔여세대 상담 진행 중',
+            '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
+            '주변 생활: 서낙동강 수변공원·초중고 학군 및 중심상업지구 인접'
+          ])
+        }),
+        Object.freeze({
+          name: '에코델타시티 중흥S-클래스 에듀리버',
+          aliases: '에코델타 중흥 에듀리버 에코델타중흥',
+          rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+          areaName: '부산',
+          fallbackLat: 35.1725,
+          fallbackLng: 128.9420,
+          status: STATUS_NORMAL_TEXT,
+          statusColor: STATUS_NORMAL_COLOR,
+          recencyBonus: 12,
+          defaultPriceMan: 56800,
+          infoLines: Object.freeze([
+            '공급위치: 부산광역시 강서구 에코델타시티',
+            '분양정보: 입주예정 2028-06 · 잔여세대 상담 진행 중',
+            '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
+            '주변 생활: 초·중·고 예정부지 도보권, 수변공원·중심상업지구 인접'
+          ])
+        }),
+        Object.freeze({
+          name: '에코델타시티 엘가로제비앙',
+          aliases: '에코델타 엘가 로제비앙 대광로제비앙',
+          rawAddress: '부산광역시 강서구 강동동 에코델타시티',
+          areaName: '부산',
+          fallbackLat: 35.1652,
+          fallbackLng: 128.9445,
+          status: STATUS_NORMAL_TEXT,
+          statusColor: STATUS_NORMAL_COLOR,
+          recencyBonus: 12,
+          defaultPriceMan: 55400,
+          infoLines: Object.freeze([
+            '공급위치: 부산광역시 강서구 에코델타시티',
+            '분양정보: 입주예정 2029-06 · 잔여세대 상담 진행 중',
+            '주변 시세: 명지·에코델타시티 인근 84㎡ 최근 실거래 약 4.9억~5.8억 원대 형성',
+            '주변 생활: 에코델타시티 학군 및 수변·상업 인프라 인접'
+          ])
+        })
+      ];
+
+      const REGION_DATA = {
+        busan: {
+          label: '부산',
+          center: { lat: 35.1628, lng: 129.0531, level: 6 },
+          districts: [
+            { name: '부산진구', lat: 35.1628, lng: 129.0531, level: 5 },
+            { name: '연제구', lat: 35.1762, lng: 129.0798, level: 5 },
+            { name: '동래구', lat: 35.2048, lng: 129.0836, level: 5 },
+            { name: '남구', lat: 35.1366, lng: 129.0843, level: 5 },
+            { name: '수영구', lat: 35.1456, lng: 129.1131, level: 5 },
+            { name: '해운대구', lat: 35.1631, lng: 129.1635, level: 5 },
+            { name: '강서구', lat: 35.149940, lng: 128.919472, level: 6 },
+            { name: '북구', lat: 35.1972, lng: 128.9903, level: 5 },
+            { name: '사상구', lat: 35.1526, lng: 128.9912, level: 5 },
+            { name: '사하구', lat: 35.1045, lng: 128.9748, level: 5 },
+            { name: '금정구', lat: 35.2430, lng: 129.0921, level: 5 },
+            { name: '동구', lat: 35.1293, lng: 129.0454, level: 5 },
+            { name: '중구', lat: 35.1062, lng: 129.0323, level: 5 },
+            { name: '서구', lat: 35.0979, lng: 129.0242, level: 5 },
+            { name: '영도구', lat: 35.0912, lng: 129.0679, level: 5 },
+            { name: '기장군', lat: 35.2446, lng: 129.2223, level: 6 }
+          ]
+        },
+        ulgyeong: {
+          label: '울산·경남',
+          center: { lat: 35.3500, lng: 128.9000, level: 9 },
+          districts: [
+            { name: '울산 중구', lat: 35.5694, lng: 129.3328, level: 6 },
+            { name: '울산 남구', lat: 35.5440, lng: 129.3302, level: 6 },
+            { name: '울산 동구', lat: 35.5047, lng: 129.4166, level: 6 },
+            { name: '울산 북구', lat: 35.5824, lng: 129.3611, level: 6 },
+            { name: '울주군', lat: 35.5222, lng: 129.2423, level: 7 },
+            { name: '창원시', lat: 35.2280, lng: 128.6811, level: 7 },
+            { name: '김해시', lat: 35.2285, lng: 128.8894, level: 6 },
+            { name: '양산시', lat: 35.3350, lng: 129.0372, level: 6 },
+            { name: '거제시', lat: 34.8806, lng: 128.6211, level: 7 },
+            { name: '진주시', lat: 35.1800, lng: 128.1076, level: 7 }
+          ]
+        },
+        daegyeong: {
+          label: '대구·경북',
+          center: { lat: 35.8714, lng: 128.6014, level: 9 },
+          districts: [
+            { name: '대구 중구', lat: 35.8693, lng: 128.6062, level: 5 },
+            { name: '대구 동구', lat: 35.8868, lng: 128.6355, level: 6 },
+            { name: '대구 서구', lat: 35.8719, lng: 128.5591, level: 5 },
+            { name: '대구 남구', lat: 35.8460, lng: 128.5977, level: 5 },
+            { name: '대구 북구', lat: 35.8858, lng: 128.5829, level: 6 },
+            { name: '수성구', lat: 35.8581, lng: 128.6306, level: 6 },
+            { name: '달서구', lat: 35.8298, lng: 128.5327, level: 6 },
+            { name: '달성군', lat: 35.7747, lng: 128.4314, level: 7 },
+            { name: '포항시', lat: 36.0190, lng: 129.3435, level: 7 },
+            { name: '구미시', lat: 36.1195, lng: 128.3446, level: 7 },
+            { name: '경산시', lat: 35.8251, lng: 128.7414, level: 6 }
+          ]
+        },
+        capital: {
+          label: '서울·수도권',
+          center: { lat: 37.5665, lng: 126.9780, level: 9 },
+          districts: [
+            { name: '강남구', lat: 37.5172, lng: 127.0473, level: 6 },
+            { name: '서초구', lat: 37.4837, lng: 127.0324, level: 6 },
+            { name: '송파구', lat: 37.5145, lng: 127.1059, level: 6 },
+            { name: '강동구', lat: 37.5301, lng: 127.1238, level: 6 },
+            { name: '마포구', lat: 37.5663, lng: 126.9016, level: 6 },
+            { name: '용산구', lat: 37.5326, lng: 126.9905, level: 6 },
+            { name: '영등포구', lat: 37.5264, lng: 126.8962, level: 6 },
+            { name: '노원구', lat: 37.6542, lng: 127.0568, level: 6 },
+            { name: '수원시', lat: 37.2636, lng: 127.0286, level: 7 },
+            { name: '성남시', lat: 37.4200, lng: 127.1267, level: 7 },
+            { name: '용인시', lat: 37.2411, lng: 127.1775, level: 7 },
+            { name: '화성시', lat: 37.1995, lng: 126.8312, level: 8 },
+            { name: '인천 연수구', lat: 37.4101, lng: 126.6783, level: 6 },
+            { name: '인천 서구', lat: 37.5454, lng: 126.6760, level: 6 }
+          ]
+        },
+        etc: {
+          label: '충청·전라·강원',
+          center: { lat: 36.3504, lng: 127.3845, level: 11 },
+          districts: [
+            { name: '대전 서구', lat: 36.3554, lng: 127.3837, level: 6 },
+            { name: '대전 유성구', lat: 36.3622, lng: 127.3565, level: 6 },
+            { name: '세종시', lat: 36.4801, lng: 127.2890, level: 7 },
+            { name: '천안시', lat: 36.8151, lng: 127.1139, level: 7 },
+            { name: '청주시', lat: 36.6424, lng: 127.4890, level: 7 },
+            { name: '광주 서구', lat: 35.1520, lng: 126.8895, level: 6 },
+            { name: '전주시', lat: 35.8242, lng: 127.1480, level: 7 },
+            { name: '원주시', lat: 37.3422, lng: 127.9202, level: 7 },
+            { name: '춘천시', lat: 37.8813, lng: 127.7298, level: 7 }
+          ]
+        }
+      };
+
+      function getSlotIndex30Min() {
+        return Math.floor(Date.now() / (30 * 60 * 1000));
+      }
+
+      function getDynamicViewers(site, idx) {
+        const now = new Date();
+        const hour = now.getHours();
+        const slot = getSlotIndex30Min();
+        const seed = site.name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+
+        let minVal = 22;
+        let maxVal = 36;
+
+        if (hour >= 0 && hour < 6) {
+          minVal = 8;
+          maxVal = 14;
+        } else if (hour >= 6 && hour < 9) {
+          minVal = 15;
+          maxVal = 26;
+        } else if ((hour >= 10 && hour < 12) || (hour >= 14 && hour < 17) || (hour >= 20 && hour < 22)) {
+          minVal = 32;
+          maxVal = 52;
+        } else if (hour >= 23) {
+          minVal = 13;
+          maxVal = 21;
         }
 
-        const matched = [];
-        renderedItems.forEach((item) => {
-          if (matchesFlexibleQuery(item, rawQ)) {
-            item.marker.setMap(map);
-            item.overlay.setMap(map);
-            matched.push(item);
-          } else {
-            item.marker.setMap(null);
-            item.overlay.setMap(null);
+        const range = maxVal - minVal + 1;
+        const base = minVal + ((seed + idx * 7) % range);
+        const step = ((slot * 3 + idx * 5 + seed) % 5) - 2;
+        let val = base + step;
+
+        if (val < minVal) val = minVal + ((seed + slot) % 3);
+        if (val > maxVal) val = maxVal - ((seed + slot) % 3);
+
+        const bonus = Number(site.recencyBonus || 0);
+        return Math.max(5, Math.min(68, val + bonus));
+      }
+
+      function formatManToWonText(man) {
+        const n = Math.max(0, Math.round(Number(man) || 0));
+        const eok = Math.floor(n / 10000);
+        const remMan = n % 10000;
+        const manStr = n.toLocaleString('ko-KR') + '만원';
+        if (eok > 0) {
+          return remMan > 0 ? `${eok}억 ${remMan.toLocaleString('ko-KR')}만원` : `${eok}억 원`;
+        }
+        return manStr;
+      }
+
+      let currentRate = 0.05;
+
+      function getCalcSummaryText() {
+        const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
+        const downMan = Math.round(totalMan * currentRate);
+        const middleMan = Math.round(totalMan * 0.60);
+        const balanceMan = Math.max(0, totalMan - downMan - middleMan);
+        const ratePct = Math.round(currentRate * 100);
+        const remPct = Math.max(0, 40 - ratePct);
+
+        return (
+          `총분양대금 ${formatManToWonText(totalMan)} / ` +
+          `계약금(${ratePct}%) ${formatManToWonText(downMan)} / ` +
+          `중도금(60%) ${formatManToWonText(middleMan)} / ` +
+          `잔금(${remPct}%) ${formatManToWonText(balanceMan)}`
+        );
+      }
+
+      function updateCalc() {
+        const totalMan = Math.max(0, Number(document.getElementById('total-price-input').value) || 0);
+        const downMan = Math.round(totalMan * currentRate);
+        const middleMan = Math.round(totalMan * 0.60);
+        const balanceMan = Math.max(0, totalMan - downMan - middleMan);
+
+        document.getElementById('calc-result').innerHTML =
+          `총분양대금: <strong>${formatManToWonText(totalMan)}</strong><br>` +
+          `• 계약금 (${Math.round(currentRate * 100)}%): <strong>${formatManToWonText(downMan)}</strong><br>` +
+          `• 중도금 (60%): <strong>${formatManToWonText(middleMan)}</strong><br>` +
+          `• 잔금 (${Math.max(0, 40 - Math.round(currentRate * 100))}%): <strong>${formatManToWonText(balanceMan)}</strong>`;
+      }
+
+      function formatDateObjYYYYMMDD(dateObj) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}${m}${d}`;
+      }
+
+      function getTodayYYYYMMDD() {
+        return formatDateObjYYYYMMDD(new Date());
+      }
+
+      function getTwoYearsAgoYYYYMMDD() {
+        const dt = new Date();
+        dt.setFullYear(dt.getFullYear() - 2);
+        return formatDateObjYYYYMMDD(dt);
+      }
+
+      function getSixMonthsAgoYYYYMM() {
+        const dt = new Date();
+        dt.setMonth(dt.getMonth() - 6);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        return `${y}${m}`;
+      }
+
+      function isMovedInMoreThanSixMonthsAgo(moveInVal) {
+        const digits = String(moveInVal || '').replace(/[^0-9]/g, '');
+        if (digits.length < 6) return false;
+        const ym = digits.slice(0, 6);
+        return ym < getSixMonthsAgoYYYYMM();
+      }
+
+      function normalizeDateDigits(val) {
+        if (!val) return '';
+        return String(val).replace(/[^0-9]/g, '').slice(0, 8);
+      }
+
+      function cleanSupplyAddress(rawAddr) {
+        if (!rawAddr) return '';
+        return String(rawAddr)
+          .replace(/\([^)]*\)/g, ' ')
+          .replace(/외\s*\d+\s*필지.*/g, '')
+          .replace(/일원.*/g, '')
+          .replace(/일대.*/g, '')
+          .replace(/[A-Za-z0-9-]+블록.*/g, '')
+          .replace(/지구.*/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      async function fetchModelPriceMap() {
+        const priceMap = new Map();
+        const infoMap = new Map();
+        try {
+          const pages = [1, 2, 3];
+          const key = encodeURIComponent(getServiceKey());
+          const responses = await Promise.all(
+            pages.map((p) => fetchJsonWithRetry(`${API_MODEL_ENDPOINT}?page=${p}&perPage=1000&serviceKey=${key}`, 8000, 1))
+          );
+
+          responses.forEach((json) => {
+            const rows = Array.isArray(json.data) ? json.data : [];
+            rows.forEach((m) => {
+              const manageNo = String(m.HOUSE_MANAGE_NO || '');
+              const rawAmt = String(m.LTTOT_TOP_AMOUNT || '').replace(/[^0-9]/g, '');
+              const amtMan = Number(rawAmt);
+              if (!manageNo || !amtMan || amtMan <= 0) return;
+
+              const modelType = m.HOUSE_TY || '';
+              const existing = priceMap.get(manageNo);
+              const is84 = /^0?84/.test(modelType);
+              if (!existing || is84) {
+                priceMap.set(manageNo, amtMan);
+                if (modelType) infoMap.set(manageNo, `${modelType}㎡ 최고가`);
+              }
+            });
+          });
+        } catch (e) {}
+        return { priceMap, infoMap };
+      }
+
+      async function fetchFirstComeSites() {
+        const detailPages = [1, 2, 3];
+        const key = encodeURIComponent(getServiceKey());
+        const [detailJsons, modelData] = await Promise.all([
+          Promise.all(
+            detailPages.map((p) => fetchJsonWithRetry(`${API_DETAIL_ENDPOINT}?page=${p}&perPage=1000&serviceKey=${key}`, 8000, 1))
+          ),
+          fetchModelPriceMap()
+        ]);
+
+        const allRows = [];
+        const seenManageNos = new Set();
+        detailJsons.forEach((json) => {
+          const rows = Array.isArray(json.data) ? json.data : [];
+          rows.forEach((row) => {
+            const id = String(row.HOUSE_MANAGE_NO || row.HOUSE_NM || '');
+            if (id && !seenManageNos.has(id)) {
+              seenManageNos.add(id);
+              allRows.push(row);
+            }
+          });
+        });
+
+        const todayStr = getTodayYYYYMMDD();
+        const twoYearsAgoStr = getTwoYearsAgoYYYYMMDD();
+
+        const filtered = allRows.filter((row) => {
+          if (isMovedInMoreThanSixMonthsAgo(row.MVN_PREARNGE_YM)) {
+            return false;
+          }
+          const contractEnd = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
+          if (!contractEnd || contractEnd.length !== 8 || contractEnd >= todayStr) {
+            return false;
+          }
+          const isOlderThanTwoYears = contractEnd < twoYearsAgoStr;
+          if (isOlderThanTwoYears) {
+            const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
+            return totalUnits > 500;
+          }
+          return true;
+        });
+
+        // 데이터 노출 통제: 필요한 최소 필드만 정제·동결하여 저장 (내부 원본 필드 제거)
+        const apiMapped = filtered.map((row, idx) => {
+          const manageNo = String(row.HOUSE_MANAGE_NO || '');
+          const name = String(row.HOUSE_NM || `분양현장 ${idx + 1}`).trim();
+          const rawAddress = String(row.HSSPLY_ADRES || '').trim();
+          const areaName = String(row.SUBSCRPT_AREA_CODE_NM || '').trim();
+          const totalUnits = Number(String(row.TOT_SUPLY_HSHLDCO || '0').replace(/[^0-9]/g, ''));
+          const supplyCnt = totalUnits > 0 ? `총 ${totalUnits}세대` : '';
+          const contractEndDigits = normalizeDateDigits(row.CNTRCT_CNCLS_ENDDE);
+          const isOlderThanTwoYears = contractEndDigits && contractEndDigits < twoYearsAgoStr;
+          const contractEndHyphen = formatHyphenDate(row.CNTRCT_CNCLS_ENDDE);
+          const moveInHyphen = formatHyphenDate(row.MVN_PREARNGE_YM);
+
+          const recencyBonus = isOlderThanTwoYears ? -6 : 12;
+
+          const infoParts = [];
+          if (supplyCnt) infoParts.push(supplyCnt);
+          if (contractEndHyphen) infoParts.push(`정당계약종료 ${contractEndHyphen}`);
+          if (moveInHyphen) infoParts.push(`입주예정 ${moveInHyphen}`);
+
+          const realPriceMan = modelData.priceMap.get(manageNo);
+          const typeLabel = modelData.infoMap.get(manageNo);
+          const marketLines = buildMarketLines(rawAddress, areaName);
+
+          const lines = Object.freeze([
+            `공급위치: ${rawAddress || areaName}`,
+            `분양정보: ${infoParts.length ? infoParts.join(' · ') : '정당계약일 경과 · 상담 진행 중'}` +
+              (typeLabel ? ` (${typeLabel})` : ''),
+            ...marketLines
+          ]);
+
+          const isAtera = normalizeSearchKey(name).includes('에코델타') && normalizeSearchKey(name).includes('아테라');
+
+          return Object.freeze({
+            name,
+            aliases: isAtera ? '에코델타 아테라 에코델타시티아테라' : '',
+            rawAddress,
+            areaName,
+            fallbackLat: isAtera ? 35.149940 : undefined,
+            fallbackLng: isAtera ? 128.919472 : undefined,
+            status: isOlderThanTwoYears ? STATUS_OLD_LARGE_TEXT : STATUS_NORMAL_TEXT,
+            statusColor: isOlderThanTwoYears ? STATUS_OLD_LARGE_COLOR : STATUS_NORMAL_COLOR,
+            recencyBonus,
+            defaultPriceMan: realPriceMan || 55000,
+            infoLines: lines
+          });
+        });
+
+        const existingNames = new Set(apiMapped.map((s) => normalizeSearchKey(s.name)));
+        VERIFIED_EXTRA_SITES.forEach((extraSite) => {
+          const norm = normalizeSearchKey(extraSite.name);
+          if (!existingNames.has(norm)) {
+            apiMapped.unshift(extraSite);
           }
         });
 
-        if (matched.length === 1) {
-          focusMatchedItem(matched[0]);
-        } else if (matched.length > 1) {
-          renderSearchDropdown(matched);
-          map.setCenter(matched[0].pos);
-          map.setLevel(8);
-        } else {
-          hideDropdown();
-          toast.style.display = 'block';
-          toast.textContent = `'${rawQ}' 검색 결과가 없습니다.`;
-          setTimeout(() => { toast.style.display = 'none'; }, 2500);
+        apiMapped.sort((a, b) => {
+          const aBusan = (`${a.areaName} ${a.rawAddress}`).includes('부산') ? 0 : 1;
+          const bBusan = (`${b.areaName} ${b.rawAddress}`).includes('부산') ? 0 : 1;
+          return aBusan - bBusan;
+        });
+
+        return apiMapped;
+      }
+
+      function resolveAccurateCoords(geocoder, places, site) {
+        return new Promise((resolve) => {
+          if (site.fallbackLat && site.fallbackLng) {
+            return resolve({ lat: site.fallbackLat, lng: site.fallbackLng });
+          }
+
+          const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
+          if (cacheKey && coordCache[cacheKey]) {
+            return resolve(coordCache[cacheKey]);
+          }
+
+          let settled = false;
+          const finishWith = (coords) => {
+            if (settled) return;
+            settled = true;
+            if (coords && cacheKey) {
+              coordCache[cacheKey] = coords;
+            }
+            resolve(coords);
+          };
+
+          // 개별 지오코딩 무한 대기 방지(4초 타임아웃)
+          setTimeout(() => finishWith(null), 4000);
+
+          const cleaned = cleanSupplyAddress(site.rawAddress);
+          const tokens = cleaned.split(' ').filter(Boolean);
+          const sigunguPrefix = tokens.slice(0, 2).join(' ');
+
+          const trySigunguFallback = () => {
+            if (!sigunguPrefix) return finishWith(null);
+            places.keywordSearch(sigunguPrefix, function (sData, sStatus) {
+              if (sStatus === kakao.maps.services.Status.OK && sData && sData[0]) {
+                const jitterLat = ((Math.random() - 0.5) * 0.008);
+                const jitterLng = ((Math.random() - 0.5) * 0.008);
+                finishWith({ lat: Number(sData[0].y) + jitterLat, lng: Number(sData[0].x) + jitterLng });
+              } else {
+                finishWith(null);
+              }
+            });
+          };
+
+          const tryKeywordFallback = () => {
+            const kw = `${sigunguPrefix} ${site.name}`.trim();
+            if (!kw) return trySigunguFallback();
+            places.keywordSearch(kw, function (data, status) {
+              if (status === kakao.maps.services.Status.OK && data && data[0]) {
+                finishWith({ lat: Number(data[0].y), lng: Number(data[0].x) });
+              } else {
+                places.keywordSearch(site.name, function (data2, status2) {
+                  if (status2 === kakao.maps.services.Status.OK && data2 && data2[0]) {
+                    finishWith({ lat: Number(data2[0].y), lng: Number(data2[0].x) });
+                  } else {
+                    trySigunguFallback();
+                  }
+                });
+              }
+            });
+          };
+
+          const primaryKw = `${sigunguPrefix} ${site.name}`.trim();
+          places.keywordSearch(primaryKw, function (pData, pStatus) {
+            if (pStatus === kakao.maps.services.Status.OK && pData && pData[0]) {
+              return finishWith({ lat: Number(pData[0].y), lng: Number(pData[0].x) });
+            }
+
+            if (!cleaned) return tryKeywordFallback();
+
+            geocoder.addressSearch(cleaned, function (result, status) {
+              if (status === kakao.maps.services.Status.OK && result && result[0]) {
+                finishWith({ lat: Number(result[0].y), lng: Number(result[0].x) });
+              } else {
+                tryKeywordFallback();
+              }
+            });
+          });
+        });
+      }
+
+      // 카카오 SDK 로드 실패 시 안전 안내
+      if (!window.kakao || !window.kakao.maps) {
+        showToast('지도를 불러오는 중 지연이 발생했습니다. 새로고침해 주세요.', 0);
+        return;
+      }
+
+      kakao.maps.load(async function () {
+        const mapEl = document.getElementById('map');
+        const map = new kakao.maps.Map(mapEl, {
+          center: new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng),
+          level: INITIAL_CENTER.level
+        });
+        const geocoder = new kakao.maps.services.Geocoder();
+        const places = new kakao.maps.services.Places();
+
+        const panel = document.getElementById('detail-panel');
+        const districtBar = document.getElementById('district-bar');
+        const dropdown = document.getElementById('search-dropdown');
+        const searchInput = document.getElementById('search-input');
+
+        let activeRegionKey = 'busan';
+        let isSitesLoaded = false;
+        let pendingSearchAfterLoad = false;
+
+        function renderDistrictBar(regionKey, selectFirst) {
+          const reg = REGION_DATA[regionKey];
+          if (!reg) return;
+          districtBar.innerHTML = '';
+          reg.districts.forEach((d, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'district-btn' + (selectFirst && idx === 0 ? ' selected' : '');
+            btn.textContent = d.name;
+            btn.onclick = function () {
+              document.querySelectorAll('.district-btn').forEach((b) => b.classList.remove('selected'));
+              btn.classList.add('selected');
+              map.setCenter(new kakao.maps.LatLng(d.lat, d.lng));
+              map.setLevel(d.level);
+            };
+            districtBar.appendChild(btn);
+          });
         }
-      };
 
-      searchInput.oninput = previewMatches;
-      document.getElementById('search-btn').onclick = runSearch;
-      searchInput.onkeydown = function (e) {
-        if (e.key === 'Enter') runSearch();
-      };
-      document.getElementById('reset-btn').onclick = function () {
-        searchInput.value = '';
-        runSearch();
-      };
+        renderDistrictBar('busan', true);
 
-      function addSitePinToMap(site, idx, coords) {
-        if (!coords) return;
-        const pos = new kakao.maps.LatLng(coords.lat, coords.lng);
-        const marker = new kakao.maps.Marker({ map: map, position: pos });
-        const viewers = getDynamicViewers(site, idx);
+        document.querySelectorAll('.region-tab').forEach((tab) => {
+          tab.onclick = function () {
+            const key = tab.getAttribute('data-region');
+            document.querySelectorAll('.region-tab').forEach((t) => t.classList.remove('active'));
+            tab.classList.add('active');
+            activeRegionKey = key;
 
-        const badge = document.createElement('div');
-        badge.className = 'pin-badge';
-        badge.textContent = `${site.name} · 최근 ${viewers}명 관심·조회`;
+            renderDistrictBar(key, true);
 
-        const openPanel = function () {
-          activeSiteForConsult = site;
-          const curViewers = getDynamicViewers(site, idx);
-          badge.textContent = `${site.name} · 최근 ${curViewers}명 관심·조회`;
-          document.getElementById('site-title').textContent = site.name;
-          const statusEl = document.getElementById('site-status');
-          statusEl.textContent = site.status;
-          statusEl.style.color = site.statusColor || STATUS_NORMAL_COLOR;
-          document.getElementById('site-viewers').textContent = `최근 ${curViewers}명 관심·조회`;
-          renderInfoLines(site.infoLines);
-          priceInput.value = site.defaultPriceMan;
-          updateCalc();
-          panel.style.display = 'block';
+            const reg = REGION_DATA[key];
+            if (reg && reg.center) {
+              map.setCenter(new kakao.maps.LatLng(reg.center.lat, reg.center.lng));
+              map.setLevel(reg.center.level);
+            }
+          };
+        });
+
+        document.getElementById('close-btn').onclick = function () {
+          panel.style.display = 'none';
         };
 
-        badge.onclick = openPanel;
-        kakao.maps.event.addListener(marker, 'click', openPanel);
+        const btn5 = document.getElementById('rate-5');
+        const btn10 = document.getElementById('rate-10');
+        const priceInput = document.getElementById('total-price-input');
+        const kakaoBtn = document.getElementById('kakao-link');
 
-        const overlay = new kakao.maps.CustomOverlay({
-          map: map,
-          position: pos,
-          content: badge,
-          yAnchor: 2.35
+        btn5.onclick = function () {
+          currentRate = 0.05;
+          btn5.classList.add('active');
+          btn10.classList.remove('active');
+          updateCalc();
+        };
+        btn10.onclick = function () {
+          currentRate = 0.10;
+          btn10.classList.add('active');
+          btn5.classList.remove('active');
+          updateCalc();
+        };
+        priceInput.oninput = updateCalc;
+
+        kakaoBtn.onclick = function (e) {
+          if (!requirePrivacyAgreement(e)) {
+            return false;
+          }
+          const site = activeSiteForConsult || {};
+          const summary = getCalcSummaryText();
+          sendLeadToSheet({
+            channel: '지도_카톡상담',
+            siteName: site.name || '미지정',
+            region: site.areaName || REGION_DATA[activeRegionKey]?.label || '부산',
+            customerName: '카톡문의고객',
+            phone: '-',
+            visitDate: '-',
+            conditions: `${summary} / 위치: ${site.rawAddress || site.areaName || '-'}`
+          });
+        };
+
+        document.querySelectorAll('form').forEach(function (form) {
+          form.addEventListener('submit', requirePrivacyAgreement, true);
         });
 
-        renderedItems.push({ site, idx, marker, overlay, badge, pos, openPanel });
-      }
+        document.querySelectorAll('button, input[type="submit"], input[type="button"], a.btn, [role="button"]').forEach(function (el) {
+          if (el.id === 'kakao-link' || el.id === 'rate-5' || el.id === 'rate-10' || el.id === 'search-btn' || el.id === 'reset-btn' || el.id === 'close-btn') {
+            return;
+          }
+          const text = (el.textContent || el.value || '').trim();
+          if (/상담|전송|신청|문의|제출|접수/.test(text)) {
+            el.addEventListener('click', requirePrivacyAgreement, true);
+          }
+        });
 
-      let apiSites = [];
-      try {
-        apiSites = await fetchFirstComeSites();
-      } catch (e) {
-        apiSites = [...VERIFIED_EXTRA_SITES];
-      }
-
-      const remainingSites = [];
-      apiSites.forEach((site, idx) => {
-        const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
-        const cached = (site.fallbackLat && site.fallbackLng)
-          ? { lat: site.fallbackLat, lng: site.fallbackLng }
-          : (cacheKey && coordCache[cacheKey] ? coordCache[cacheKey] : null);
-        if (cached) {
-          addSitePinToMap(site, idx, cached);
-        } else {
-          remainingSites.push({ site, idx });
+        function hideDropdown() {
+          dropdown.style.display = 'none';
+          dropdown.innerHTML = '';
         }
+
+        function showLoadingInDropdown() {
+          dropdown.innerHTML = '<div class="dropdown-loading">분양현장 목록을 불러오는 중입니다...</div>';
+          dropdown.style.display = 'block';
+        }
+
+        const renderedItems = [];
+
+        function focusMatchedItem(item) {
+          map.setCenter(item.pos);
+          map.setLevel(5);
+          item.openPanel();
+          hideDropdown();
+        }
+
+        function renderSearchDropdown(matched) {
+          dropdown.innerHTML = '';
+          if (!matched.length) {
+            hideDropdown();
+            return;
+          }
+          // 한 번에 표시되는 검색 후보 목록 상한 제한(최대 15건)으로 대량 긁어가기 방지
+          matched.slice(0, 15).forEach((item) => {
+            const optBtn = document.createElement('button');
+            optBtn.type = 'button';
+            optBtn.className = 'search-option';
+
+            const titleEl = document.createElement('span');
+            titleEl.className = 'search-option-title';
+            titleEl.textContent = item.site.name;
+
+            const subEl = document.createElement('span');
+            subEl.className = 'search-option-sub';
+            subEl.textContent = item.site.rawAddress || item.site.areaName || '위치 확인 가능';
+
+            optBtn.appendChild(titleEl);
+            optBtn.appendChild(subEl);
+            optBtn.onclick = function () {
+              focusMatchedItem(item);
+            };
+            dropdown.appendChild(optBtn);
+          });
+          dropdown.style.display = 'block';
+        }
+
+        const previewMatches = function () {
+          const q = searchInput.value.trim();
+          if (!q) {
+            hideDropdown();
+            return [];
+          }
+          if (!isSitesLoaded) {
+            pendingSearchAfterLoad = true;
+            showLoadingInDropdown();
+            return [];
+          }
+          const matched = renderedItems.filter((item) => matchesFlexibleQuery(item, q));
+          renderSearchDropdown(matched);
+          return matched;
+        };
+
+        const runSearch = function () {
+          if (!rateTracker.allow(25, 10000)) {
+            showToast('단시간 검색 요청이 많습니다. 잠시 후 다시 이용해 주세요.', 3000);
+            return;
+          }
+
+          const rawQ = searchInput.value.trim();
+          if (!rawQ) {
+            pendingSearchAfterLoad = false;
+            hideDropdown();
+            renderedItems.forEach((item) => {
+              item.marker.setMap(map);
+              item.overlay.setMap(map);
+            });
+            map.setCenter(new kakao.maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng));
+            map.setLevel(INITIAL_CENTER.level);
+            return;
+          }
+
+          if (!isSitesLoaded) {
+            pendingSearchAfterLoad = true;
+            showLoadingInDropdown();
+            return;
+          }
+
+          const matched = [];
+          renderedItems.forEach((item) => {
+            if (matchesFlexibleQuery(item, rawQ)) {
+              item.marker.setMap(map);
+              item.overlay.setMap(map);
+              matched.push(item);
+            } else {
+              item.marker.setMap(null);
+              item.overlay.setMap(null);
+            }
+          });
+
+          if (matched.length === 1) {
+            focusMatchedItem(matched[0]);
+          } else if (matched.length > 1) {
+            renderSearchDropdown(matched);
+            map.setCenter(matched[0].pos);
+            map.setLevel(8);
+          } else {
+            hideDropdown();
+            showToast(`'${rawQ}' 검색 결과가 없습니다.`, 2500);
+          }
+        };
+
+        searchInput.oninput = previewMatches;
+        document.getElementById('search-btn').onclick = runSearch;
+        searchInput.onkeydown = function (e) {
+          if (e.key === 'Enter') runSearch();
+        };
+        document.getElementById('reset-btn').onclick = function () {
+          searchInput.value = '';
+          runSearch();
+        };
+
+        function addSitePinToMap(site, idx, coords) {
+          if (!coords) return;
+          const pos = new kakao.maps.LatLng(coords.lat, coords.lng);
+          const marker = new kakao.maps.Marker({ map: map, position: pos });
+          const viewers = getDynamicViewers(site, idx);
+
+          const badge = document.createElement('div');
+          badge.className = 'pin-badge';
+          badge.textContent = `${site.name} · 최근 ${viewers}명 관심·조회`;
+
+          const openPanel = function () {
+            if (!rateTracker.allow(30, 10000)) {
+              showToast('조회 요청이 너무 빠릅니다. 잠시 후 다시 클릭해 주세요.', 2500);
+              return;
+            }
+            activeSiteForConsult = site;
+            const curViewers = getDynamicViewers(site, idx);
+            badge.textContent = `${site.name} · 최근 ${curViewers}명 관심·조회`;
+            document.getElementById('site-title').textContent = site.name;
+            const statusEl = document.getElementById('site-status');
+            statusEl.textContent = site.status;
+            statusEl.style.color = site.statusColor || STATUS_NORMAL_COLOR;
+            document.getElementById('site-viewers').textContent = `최근 ${curViewers}명 관심·조회`;
+            renderInfoLines(site.infoLines);
+            priceInput.value = site.defaultPriceMan;
+            updateCalc();
+            panel.style.display = 'block';
+          };
+
+          badge.onclick = openPanel;
+          kakao.maps.event.addListener(marker, 'click', openPanel);
+
+          const overlay = new kakao.maps.CustomOverlay({
+            map: map,
+            position: pos,
+            content: badge,
+            yAnchor: 2.35
+          });
+
+          renderedItems.push({ site, idx, marker, overlay, badge, pos, openPanel });
+        }
+
+        let apiSites = [];
+        try {
+          apiSites = await fetchFirstComeSites();
+          if (!Array.isArray(apiSites) || apiSites.length === 0) {
+            apiSites = [...VERIFIED_EXTRA_SITES];
+          }
+        } catch (e) {
+          apiSites = [...VERIFIED_EXTRA_SITES];
+        }
+
+        const remainingSites = [];
+        apiSites.forEach((site, idx) => {
+          const cacheKey = normalizeSearchKey(`${site.name}_${site.rawAddress}`);
+          const cached = (site.fallbackLat && site.fallbackLng)
+            ? { lat: site.fallbackLat, lng: site.fallbackLng }
+            : (cacheKey && coordCache[cacheKey] ? coordCache[cacheKey] : null);
+          if (cached) {
+            addSitePinToMap(site, idx, cached);
+          } else {
+            remainingSites.push({ site, idx });
+          }
+        });
+
+        const BATCH_SIZE = 40;
+        for (let i = 0; i < remainingSites.length; i += BATCH_SIZE) {
+          const chunk = remainingSites.slice(i, i + BATCH_SIZE);
+          const coordsList = await Promise.all(
+            chunk.map(({ site }) => resolveAccurateCoords(geocoder, places, site))
+          );
+          chunk.forEach(({ site, idx }, cIdx) => {
+            addSitePinToMap(site, idx, coordsList[cIdx]);
+          });
+        }
+        saveCoordCache();
+
+        isSitesLoaded = true;
+        showToast(`분양현장 ${renderedItems.length}곳 표시 중`, 3500);
+
+        if (pendingSearchAfterLoad && searchInput.value.trim()) {
+          pendingSearchAfterLoad = false;
+          runSearch();
+        }
+
+        setInterval(function () {
+          renderedItems.forEach(function (item) {
+            const v = getDynamicViewers(item.site, item.idx);
+            item.badge.textContent = `${item.site.name} · 최근 ${v}명 관심·조회`;
+          });
+        }, 60 * 1000);
       });
-
-      const BATCH_SIZE = 40;
-      for (let i = 0; i < remainingSites.length; i += BATCH_SIZE) {
-        const chunk = remainingSites.slice(i, i + BATCH_SIZE);
-        const coordsList = await Promise.all(
-          chunk.map(({ site }) => resolveAccurateCoords(geocoder, places, site))
-        );
-        chunk.forEach(({ site, idx }, cIdx) => {
-          addSitePinToMap(site, idx, coordsList[cIdx]);
-        });
-      }
-      saveCoordCache();
-
-      isSitesLoaded = true;
-      toast.textContent = `분양현장 ${renderedItems.length}곳 표시 중`;
-      setTimeout(() => { toast.style.display = 'none'; }, 3500);
-
-      if (pendingSearchAfterLoad && searchInput.value.trim()) {
-        pendingSearchAfterLoad = false;
-        runSearch();
-      }
-
-      setInterval(function () {
-        renderedItems.forEach(function (item) {
-          const v = getDynamicViewers(item.site, item.idx);
-          item.badge.textContent = `${item.site.name} · 최근 ${v}명 관심·조회`;
-        });
-      }, 60 * 1000);
-    });
+    })();
   </script>
 </body>
 </html>
