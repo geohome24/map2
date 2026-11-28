@@ -475,9 +475,9 @@
       // 1. 경쟁사 견제 · 무단 접근/크롤링/코드 노출 차단 모듈
       // =========================================================
       const ALLOWED_HOST_SUFFIXES = [
-        'pages.dev',
         'sites.google.com',
         'googleusercontent.com',
+        'script.google.com',
         'imweb.me',
         'geohome',
         'localhost',
@@ -491,22 +491,27 @@
       }
 
       function enforceAccessSecurity() {
-        // 자동화 봇/헤드리스 브라우저 차단
         if (navigator.webdriver === true) {
           return false;
         }
-        const currentHost = window.location.hostname || '';
-        const isEmbedded = window.self !== window.top;
-
-        if (isEmbedded) {
-          const ref = document.referrer || '';
-          if (ref && !isAllowedDomain(ref)) {
-            return false;
-          }
-        } else if (currentHost && !isAllowedDomain(currentHost)) {
-          return false;
+        const currentHost = (window.location.hostname || '').toLowerCase();
+        let isEmbedded = false;
+        try {
+          isEmbedded = (window.self !== window.top);
+        } catch (e) {
+          isEmbedded = true;
         }
-        return true;
+
+        if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+          return true;
+        }
+        if (isEmbedded) {
+          return true;
+        }
+        if (!currentHost.endsWith('.pages.dev') && isAllowedDomain(currentHost)) {
+          return true;
+        }
+        return false;
       }
 
       if (!enforceAccessSecurity()) {
@@ -691,7 +696,6 @@
       }
 
       function sendLeadToSheet(rawPayload) {
-        // 전송 전 동의 재검증
         if (!isPrivacyAgreed()) return;
 
         const webhookUrl = getWebhookUrl();
@@ -1382,7 +1386,6 @@
             resolve(coords);
           };
 
-          // 개별 지오코딩 무한 대기 방지(4초 타임아웃)
           setTimeout(() => finishWith(null), 4000);
 
           const cleaned = cleanSupplyAddress(site.rawAddress);
@@ -1439,7 +1442,6 @@
         });
       }
 
-      // 카카오 SDK 로드 실패 시 안전 안내
       if (!window.kakao || !window.kakao.maps) {
         showToast('지도를 불러오는 중 지연이 발생했습니다. 새로고침해 주세요.', 0);
         return;
@@ -1580,7 +1582,6 @@
             hideDropdown();
             return;
           }
-          // 한 번에 표시되는 검색 후보 목록 상한 제한(최대 15건)으로 대량 긁어가기 방지
           matched.slice(0, 15).forEach((item) => {
             const optBtn = document.createElement('button');
             optBtn.type = 'button';
